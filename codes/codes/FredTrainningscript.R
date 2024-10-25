@@ -47,3 +47,21 @@ admin<-distinct(admin)
 ##For duplicates based on columns remember to pt the option .Keep_all=TRUE so that R doesnt drop other variables
 admin<-admin%>%distinct(fk_person,doa,.keep_all =TRUE)
 View(admin)
+##Library lubridate or generating year months day time
+require(lubridate)
+admin$yearlub<-year(admin$doa)
+admin$monlub<-month(admin$doa)
+admin$daylub<-day(admin$doa)
+##time 
+admin$toa<-hms(admin$time_admn)
+admin$hour<-hour(admin$toa)
+admin$minutes<-minute(admin$toa)
+admin$seconds<-second(admin$toa)
+
+subset(admin,select=c(time_admn,toa,hour,minutes,seconds))
+
+
+
+
+
+
