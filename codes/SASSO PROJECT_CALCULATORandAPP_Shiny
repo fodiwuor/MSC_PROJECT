@@ -1,0 +1,383 @@
+##calculator
+library(shiny)
+
+# Data for weekly feed consumption
+data <- data.frame(
+  Week = 0:23,
+  Week_Range = paste0(0:23, "-", 1:24, " weeks"),
+  Daily_Intake = c(15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 110, 110, 110, 110)
+)
+
+# Default values
+DEFAULT_BAG_PRICE <- 4000
+DEFAULT_BAG_WEIGHT <- 50
+
+ui <- fluidPage(
+  titlePanel("Chick Feed Consumption Calculator"),
+  sidebarLayout(
+    sidebarPanel(
+      numericInput("bag_price", "Enter Bag Price (Shillings):", value = DEFAULT_BAG_PRICE, min = 1),
+      actionButton("confirm_bag_price", "Confirm Price Change"),
+      numericInput("bag_weight_kg", "Enter Bag Weight (kg):", value = DEFAULT_BAG_WEIGHT, min = 1, max = 100),
+      actionButton("confirm_bag_weight", "Confirm Weight Change"),
+      textOutput("bag_weight_g"),
+      numericInput("supplier_cost", "Enter Supplier Cost per Chick (Shillings):", value = 120, min = 0),
+      selectInput("acquisition_week", "Select Acquisition Week:", choices = 0:23, selected = 0),
+      selectInput("week", "Select Week (Current Age in Weeks):", choices = 1:24, selected = 1),
+      numericInput("manual_age", "Manual Age in Days (Optional):", value = NA, min = 1),
+      uiOutput("supplier_delivery_input"),
+      actionButton("calculate_manual_age_cost", "Calculate Manual Age Costs")
+    ),
+    mainPanel(
+      textOutput("cost_per_gram_output"),
+      textOutput("cost_output"),
+      tableOutput("summary_table"),
+      textOutput("profit_info")
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  
+  bag_price <- reactiveVal(DEFAULT_BAG_PRICE)
+  bag_weight <- reactiveVal(DEFAULT_BAG_WEIGHT)
+  user_secret_code <- reactiveVal(NULL)
+
+  # Show initial secret code modal
+  observe({
+    showModal(modalDialog(
+      title = "Set Your Secret Code",
+      "Please create a secret code to secure price and weight changes:",
+      passwordInput("set_secret_code", "Enter Secret Code"),
+      passwordInput("confirm_secret_code", "Confirm Secret Code"),
+      footer = actionButton("save_secret_code", "Save Code"),
+      easyClose = FALSE
+    ))
+  })
+
+  observeEvent(input$save_secret_code, {
+    if (input$set_secret_code == input$confirm_secret_code && input$set_secret_code != "") {
+      user_secret_code(input$set_secret_code)
+      removeModal()
+    } else {
+      showModal(modalDialog(title = "Error", "Codes do not match or are empty. Try again.", easyClose = TRUE))
+    }
+  })
+
+  validateSecret <- function(action, field) {
+    showModal(modalDialog(
+      title = paste("Confirm", action),
+      "Enter your secret code:",
+      passwordInput("verify_code", "Secret Code"),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("confirm_action", "Confirm")
+      )
+    ))
+
+    observeEvent(input$confirm_action, {
+      if (!is.null(user_secret_code()) && input$verify_code == user_secret_code()) {
+        field(input[[action]])
+        removeModal()
+      } else {
+        showModal(modalDialog(title = "Error", "Incorrect code. Action canceled.", easyClose = TRUE))
+      }
+    }, once = TRUE)
+  }
+
+  observeEvent(input$confirm_bag_price, { validateSecret("bag_price", bag_price) })
+  observeEvent(input$confirm_bag_weight, { validateSecret("bag_weight_kg", bag_weight) })
+
+  output$bag_weight_g <- renderText({
+    paste("Bag Weight (grams):", bag_weight() * 1000, "g")
+  })
+
+  cost_per_gram <- reactive({ bag_price() / (bag_weight() * 1000) })
+
+  computed_data <- reactive({
+    data$Weekly_Intake <- data$Daily_Intake * 7
+    data$Cumulative_Intake <- cumsum(data$Weekly_Intake)
+    data$Weekly_Cost <- data$Weekly_Intake * cost_per_gram()
+    data$Cumulative_Cost <- cumsum(data$Weekly_Cost)
+    data
+  })
+
+  filtered_data <- reactive({
+    acquisition_week_adj <- as.numeric(input$acquisition_week)
+    subset(computed_data(), Week >= acquisition_week_adj & Week < as.numeric(input$week))
+  })
+
+  output$cost_per_gram_output <- renderText({
+    paste("Cost per gram:", round(cost_per_gram(), 4), "Shillings")
+  })
+
+  output$cost_output <- renderText({
+    total_feed_cost <- sum(filtered_data()$Weekly_Cost, na.rm = TRUE)
+    total_cost_supplier <- total_feed_cost + input$supplier_cost
+    paste("Total feed cost plus supplier cost from week", input$acquisition_week, "to week", input$week, "is:", round(total_cost_supplier, 2), "Shillings")
+  })
+
+  output$summary_table <- renderTable({
+    computed_table <- filtered_data()
+    computed_table$Total_Cost_Supplier <- cumsum(computed_table$Weekly_Cost) + input$supplier_cost
+    computed_table <- computed_table[, c("Week_Range", "Daily_Intake", "Weekly_Intake", "Weekly_Cost")]
+    colnames(computed_table) <- c("Week Range", "Daily Intake (grams)", "Weekly Intake (grams)", "Cost Consumed (Shillings)")
+    computed_table
+  })
+
+  output$profit_info <- renderText({
+    paste("Additional profit per chick(Your profit to add;make it atleast 170 because there are other expenses):200 Shillings")
+  })
+
+  output$supplier_delivery_input <- renderUI({
+    if (!is.na(input$manual_age)) {
+      numericInput("supplier_delivery_age", "Age in Days When Supplied:", value = 0, min = 0, max = input$manual_age)
+    }
+  })
+
+  # Manage notifications (track last notification ID)
+  lastNotificationId <- reactiveVal(NULL)
+
+  observeEvent(input$calculate_manual_age_cost, {
+    if (!is.na(input$manual_age) && !is.null(input$supplier_delivery_age)) {
+      
+      calc_feed_cost_exact <- function(age_days, delivery_days) {
+        grams <- 0
+        supplier_grams <- 0
+        
+        for (week in 0:23) {
+          start_day <- week * 7
+          end_day <- (week + 1) * 7 - 1
+          daily_intake <- data$Daily_Intake[week + 1]
+          
+          if (age_days > start_day) {
+            days_in_week <- min(age_days, end_day + 1) - start_day
+            grams <- grams + (days_in_week * daily_intake)
+          }
+          
+          if (delivery_days > start_day) {
+            days_in_week <- min(delivery_days, end_day + 1) - start_day
+            supplier_grams <- supplier_grams + (days_in_week * daily_intake)
+          }
+        }
+        
+        feed_cost <- (grams - supplier_grams) * cost_per_gram()
+        total_cost <- feed_cost + input$supplier_cost
+        list(feed_cost = round(feed_cost, 2), total_cost = round(total_cost, 2))
+      }
+      
+      result <- calc_feed_cost_exact(input$manual_age, input$supplier_delivery_age)
+
+      if (!is.null(lastNotificationId())) {
+        removeNotification(lastNotificationId())
+      }
+
+      newNotificationId <- showNotification(
+        paste0("For exactly ", input$manual_age, " days, feed cost is ", 
+               result$feed_cost, " Shillings, and total cost including supplier is ", 
+               result$total_cost, " Shillings."),
+        type = "message", duration =60
+      )
+
+      lastNotificationId(newNotificationId)
+
+    } else {
+      showNotification("Please enter both Manual Age and Supplier Delivery Age.", type = "warning")
+    }
+  })
+}
+
+shinyApp(ui, server)
+
+##SASSO WEBAPP
+
+library(shiny)
+library(DT)
+library(openxlsx)
+library(shinyjs)
+
+customer_file <- "customer_details.xlsx"
+completed_file <- "completed_requests.xlsx"
+deleted_file <- "deleted_requests.xlsx"
+
+if (!file.exists(customer_file)) {
+  write.xlsx(data.frame(Date = character(), Name = character(), Phone = character(), Email = character(), Needs = character(), Completed = character()), customer_file)
+}
+
+if (!file.exists(completed_file)) {
+  write.xlsx(data.frame(Date = character(), Name = character(), Phone = character(), Email = character(), Needs = character(), Completed = character()), completed_file)
+}
+
+if (!file.exists(deleted_file)) {
+  write.xlsx(data.frame(Date = character(), Name = character(), Phone = character(), Email = character(), Needs = character(), Completed = character()), deleted_file)
+}
+
+ui <- fluidPage(
+  useShinyjs(),
+  tags$style(HTML(
+    "body {background-color: green;} 
+    .error {color: red;} 
+    .btn-danger, #restore_request {display: none;} 
+    .input-error {color: red; font-size: 12px; margin-top: 5px; display: block;}"
+  )),
+  
+  titlePanel("Fred's Poultry Business - Sasso F1 Kienyeji"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("role", "How can we help you?", choices = c("Buyer", "Supplier", "Learner")),
+      textInput("needs", "Describe your needs:", value = ""),
+      textInput("name", "Your Name", value = ""),
+      span(id = "name_error", class = "input-error"),
+      textInput("phone", "Phone Number (East Africa Format)", value = ""),
+      span(id = "phone_error", class = "input-error"),
+      textInput("email", "Email", value = ""),
+      span(id = "email_error", class = "input-error"),
+      div(id = "warning_message", style = "color: red; font-weight: bold; display: none;",
+          "⚠️ WARNING: DOUBLE-CHECK ALL DETAILS BEFORE SUBMITTING. CHANGES WILL NOT BE POSSIBLE AFTER SUBMISSION."),
+      actionButton("submit", "Submit", style = "display: none;"),
+      br(),
+      actionButton("download_prompt", "Admin Access"),
+      downloadButton("download", "Download Requests", style = "display: none;")
+    ),
+    mainPanel(
+      h2("Why Choose Fred's Poultry?"),
+      p("Fred's Poultry Farm is the best choice for poultry enthusiasts. We raise the finest Sasso F1 Kienyeji chickens sourced directly from Uzima."),
+      h2("What We Supply"),
+      tags$ul(
+        tags$li("4-week-old fully vaccinated chicks"),
+        tags$li("3-month-old chickens"),
+        tags$li("6-month-old and older chickens")
+      ),
+      h2("Location"),
+      p("Homa Bay County, Rangwe Constituency, Kochia Central"),
+      h2("Contact Us"),
+      p("📞 0706305628"),
+      p("📞 0701533461"),
+      p("📞 0114578055"),
+      p("✉️ Email: orwafredrick95@gmail.com"),
+      div(id = "admin_section", style = "display: none;", DTOutput("pending_requests")),
+      fluidRow(
+        column(4, actionButton("complete_request", "Toggle Completed", style = "display:none;")),
+        column(4, actionButton("delete_request", "Delete Selected Request", style = "display:none;")),
+        column(4, actionButton("restore_request", "Restore Deleted Request", style = "display:none;"))
+      )
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  
+  observe({
+    name_valid <- !grepl("[0-9]", input$name) && nchar(input$name) > 0
+    phone_valid <- grepl("^\\+?254\\d{9}$|^07\\d{8}$|^01\\d{8}$", input$phone)
+    email_valid <- grepl("^.+@.+\\..+$", input$email)
+    
+    runjs("$('#name_error').text('')")
+    runjs("$('#phone_error').text('')")
+    runjs("$('#email_error').text('')")
+    
+    if (!name_valid) runjs("$('#name_error').text('Name cannot be empty or contain numbers.')")
+    if (!phone_valid) runjs("$('#phone_error').text('Invalid phone format.')")
+    if (!email_valid) runjs("$('#email_error').text('Invalid email format.')")
+    
+    if (name_valid && phone_valid && email_valid) {
+      runjs("$('#submit').show()")
+      runjs("$('#warning_message').show()")
+    } else {
+      runjs("$('#submit').hide()")
+      runjs("$('#warning_message').hide()")
+    }
+  })
+  
+  observeEvent(input$submit, {
+    showModal(modalDialog(
+      title = "Confirm Submission",
+      "Are you sure you want to submit your details?",
+      footer = tagList(modalButton("Cancel"), actionButton("confirm_submit", "Yes"))
+    ))
+  })
+  
+  observeEvent(input$confirm_submit, {
+    removeModal()
+    new_entry <- data.frame(Date = format(Sys.time(), "%Y-%m-%d %H:%M:%S"), Name = input$name, Phone = input$phone, 
+                            Email = input$email, Needs = input$needs, Completed = "Pending")
+    existing_data <- read.xlsx(customer_file)
+    write.xlsx(rbind(existing_data, new_entry), customer_file, overwrite = TRUE)
+    updateTextInput(session, "name", value = "")
+    updateTextInput(session, "phone", value = "")
+    updateTextInput(session, "email", value = "")
+    updateTextInput(session, "needs", value = "")
+    showModal(modalDialog(title = "Submission Successful",
+                          "Thank you, our most precious customer. We will get back to you shortly.",
+                          easyClose = TRUE))
+  })
+  
+  observeEvent(input$download_prompt, {
+    showModal(modalDialog(
+      title = "Admin Access",
+      textInput("passcode_entry", "Enter Passcode"),
+      footer = tagList(modalButton("Cancel"), actionButton("check_passcode", "OK"))
+    ))
+  })
+  
+  observeEvent(input$check_passcode, {
+    if (input$passcode_entry == "Gordon") {
+      removeModal()
+      showNotification("Access Granted.", type = "message")
+      runjs("$('#admin_section').show(); $('#download').show(); $('#complete_request').show(); $('#delete_request').show(); $('#restore_request').show();")
+      refreshTable()
+    } else {
+      showNotification("❌ Incorrect passcode.", type = "error")
+    }
+  })
+  
+  observeEvent(input$complete_request, {
+    selected <- input$pending_requests_rows_selected
+    if (length(selected) == 0) return(showNotification("Select a row first!", type = "error"))
+    data <- read.xlsx(customer_file)
+    data$Completed[selected] <- ifelse(data$Completed[selected] == "Pending", "Customer Served", "Pending")
+    write.xlsx(data, customer_file, overwrite = TRUE)
+    refreshTable()
+  })
+  
+  observeEvent(input$delete_request, {
+    selected <- input$pending_requests_rows_selected
+    if (length(selected) == 0) return(showNotification("Select a row first!", type = "error"))
+    data <- read.xlsx(customer_file)
+    deleted_data <- data[selected, ]
+    remaining_data <- data[-selected, ]
+    write.xlsx(remaining_data, customer_file, overwrite = TRUE)
+    deleted_log <- read.xlsx(deleted_file)
+    write.xlsx(rbind(deleted_log, deleted_data), deleted_file, overwrite = TRUE)
+    refreshTable()
+  })
+  
+  observeEvent(input$restore_request, {
+    deleted_data <- read.xlsx(deleted_file)
+    if (nrow(deleted_data) == 0) return(showNotification("No deleted requests to restore.", type = "warning"))
+    showModal(modalDialog(
+      title = "Restore Deleted Request",
+      DTOutput("deleted_table"),
+      footer = tagList(modalButton("Cancel"), actionButton("confirm_restore", "Restore Selected"))
+    ))
+    output$deleted_table <- renderDT(datatable(deleted_data, selection = "single", options = list(pageLength = 5)))
+    observeEvent(input$confirm_restore, {
+      selected <- input$deleted_table_rows_selected
+      if (length(selected) == 0) return(showNotification("Select a row to restore.", type = "error"))
+      write.xlsx(rbind(read.xlsx(customer_file), deleted_data[selected,]), customer_file, overwrite = TRUE)
+      write.xlsx(deleted_data[-selected,], deleted_file, overwrite = TRUE)
+      refreshTable()
+      removeModal()
+    })
+  })
+  
+  output$download <- downloadHandler(function() paste("customer_details_", Sys.Date(), ".xlsx", sep = ""), content = function(file) file.copy(customer_file, file))
+  refreshTable <- function() { output$pending_requests <- renderDT(read.xlsx(customer_file), selection = "single") }
+}
+
+shinyApp(ui, server)
+
+
+
+
