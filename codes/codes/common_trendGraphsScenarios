@@ -1,0 +1,583 @@
+## =========================
+## 3-panel plot: Z (true, unaffected) by scenario
+## =========================
+##read my data(Expted B2 analysis)
+##load packages
+##Package area.Load packages
+rm(list = ls(all.names = TRUE), envir = .GlobalEnv)
+
+if (!requireNamespace("MASS", quietly = TRUE)) install.packages("MASS")
+library(MASS)
+
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
+library(dplyr)
+library(tscount)
+library(sandwich)
+library(lmtest)
+library(broom)
+library(MASS)
+
+
+##Analysis function
+common_allx<-function(common_all,TrdAR=1,delta=0.0001,lagnewestPRE_postCombine=0,lagnewestPRE=0,disP=350){
+  ##Newey-west+Dispersion
+  #Newey-west
+  nw_vcov<- function(model, L) {
+    sandwich::NeweyWest(model, lag = L, prewhite = FALSE, adjust = TRUE)
+  }
+  ##optimize speed just use 350 dispersion used during simulation.
+  fam_nb <- MASS::negative.binomial(disP)
+  #common_all<-common_all[common_all$EstimandScenario=="minimum",]
+  #common_all<-common_all[common_all$EstimandScenario=="Maximum",]
+  t0<-common_all$t0[1]
+  tq<-common_all$tq[1]
+  print(t0)
+  print(tq)
+  ##drop these unnecessary columns
+  common_all$t0<-NULL
+  common_all$tq<-NULL
+  nrow(common_all)
+  View(common_all)
+  #Analysis
+  #delta correction
+  #delta<-0.0001
+  
+  #by_sim_coefs <- common_all %>%
+  #group_by(j) %>%
+  #reframe({
+  #d <- cur_data_all() 
+  #m <- glm.nb(YPolicyon_X5pct~P+X1+t, data = d)   # change Y to your outcome
+  #tidy(m) |>
+  #mutate(AIC = AIC(m), logLik = as.numeric(logLik(m)))
+  #})
+  
+  #mean(by_sim_coefs$estimate[(by_sim_coefs$term=="P")])
+  #Estimate without adjusting for X2=-0.3539
+  
+  
+  
+  
+  #---FITTING MODELS---#
+  ##generate storing variables
+  common_all$dataset<-NA
+  
+  #confimr observations
+  common_all$Allobs<-NA
+  common_all$AllobsPre<-NA
+  #extract p_valuefor common tren test
+  common_all$CommonAsssumption_Pvalue<-NA
+  #Z strongerViolationtrend
+  common_all$CMNassumpZstongerV_Pvalue<-NA
+  
+  ##Coefficient of time
+  common_all$coef_tZcommon<-NA
+  common_all$coef_tZstngerV<-NA
+  
+  
+  
+  ##CITS
+  common_all$P_estimateCITS<-NA
+  common_all$Pstd_estimateCITS<-NA
+  #power_CITS<-0
+  #AR order traditional regression na auto-corelation simulated
+  common_all$TrdarOrderfull<-NA
+  
+  ##Traditional regression model adjusted for all confounders
+  common_all$P_estimateTrd<-NA
+  common_all$Pstd_estimateTrd<-NA
+  #power_Trdfull<-0
+  #Traditional regression without X1 adjustment
+  common_all$P_estimateTrdX1_no<-NA
+  common_all$Pstd_estimateTrdX1_no<-NA
+  #power_TrdnoX1<-0
+  
+  
+  #Traditional regression without time adjustment
+  common_all$P_estimateTrd_t_no<-NA
+  common_all$Pstd_estimateTr_t_no<-NA
+  #power_Trdno_t<-0
+  
+  
+  ##keep j<=50 for modifying/tuning coefficients ease.
+  #common_all<-common_all%>%filter(j<=50)
+  
+  
+  
+  ##cheking in how many simulations do I not meet common trend assumption Assumption?
+  #True non_Violated Z
+  #countPlessAlphaCITS=0
+  ##Violated Z
+  #countPlesalphaZCITS_SngerV=0
+  
+  
+  ##checking how many of My Z are zero
+  #sumzeroZ=0
+  #sumnonzeroZ=0
+  ##place holders move them inside
+  power_CITS<-0
+  power_Trdfull<-0
+  power_TrdnoX1<-0
+  power_Trdno_t<-0
+  ##cheking in how many simulations do I not meet common trend assumption Assumption?
+  #True non_Violated Z
+  countPlessAlphaCITS=0
+  ##Violated Z
+  countPlesalphaZCITS_SngerV=0
+  
+  
+  ##checking how many of My Z are zero
+  sumzeroZ=0
+  sumnonzeroZ=0
+  
+  ##Arrange
+  common_all<-common_all%>%arrange(j,t)
+  gh<-max(common_all$j)
+  print(gh)
+  kl<-1
+  
+  for (prof in 1:gh) {
+    print(paste("Analysing dataset",prof,sep=""))
+    #common_all<-common_all%>%arrange(j,t)
+    common_all$dataset[kl]<-prof
+    nk<-nrow(common_all[common_all$j==prof,])
+    nkpre<-nrow(common_all[((common_all$j==prof) & (common_all$t<t0)),])
+    common_all$Allobs[kl]<-nk
+    common_all$AllobsPre[kl]<-nkpre
+    nkkdt<-common_all[common_all$j==prof,]
+    klf<-min(nkkdt$Z)
+    if (klf<=0){
+      print(paste("ZERO is in dataset",prof,"for Z",sep =""))
+      sumzeroZ<-sumzeroZ+1 
+    }else{
+      sumnonzeroZ<-sumnonzeroZ+1
+    }
+    
+    
+    
+    ##testing common trend first
+    #datpre<-subset(dat,P==0)
+    prenkt<-common_all[((common_all$j==prof) & (common_all$t<t0)),]
+    if(lagnewestPRE>0){
+      Lpre<-lagnewestPRE
+    }else{
+      Lpre<- floor(nrow(prenkt)^(1/4)) 
+    }
+    print(paste("Lag for PRE intervention is",Lpre,sep=""))
+    #m_off1<- glm.nb(Y ~t + offset(log(Z+delta)),
+    #data =prenkt)
+    
+    # Compute Newey-West variance-covariance matrix (lag = 3)
+    #vcov_nw <- NeweyWest(m_off1, lag =Lpre, prewhite = FALSE, adjust = TRUE)
+    
+    # Print coefficient table with Newey-West standard errors
+    #ct11<-coeftest(m_off1, vcov = vcov_nw)
+    
+    #koblo<- ct11["t", grep("^Pr\\(", colnames(ct11), value = TRUE)]
+    
+    
+    ## (a) Pre-policy common-trend test (keep HAC)
+    m_off1 <- glm(Y ~ t + offset(log(Z + delta)),
+                  family =fam_nb, data = prenkt)
+    
+    Vpre   <-nw_vcov(m_off1,Lpre)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off1)["t"] / sqrt(diag(Vpre)["t"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t 
+    
+    
+    
+    
+    ##extracting Evidence of meeting common trend assumption
+    ##countPlesalphaZCITS_SngerV
+    common_all$CommonAsssumption_Pvalue[kl]<-koblo
+    common_all$coef_tZcommon[kl]<-coef(m_off1)["t"]
+    
+    
+    if (koblo<0.05){
+      countPlessAlphaCITS=countPlessAlphaCITS+1 
+    }else{
+      countPlessAlphaCITS<-countPlessAlphaCITS+0
+    }
+    
+    #datpre<-subset(dat,P==0)
+    #Z stongerViolation Common trend
+    m_off1 <- glm(Y ~ t + offset(log(ZmStrongerparaV+delta)),
+                  family =fam_nb, data = prenkt)
+    #coefficient
+    common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    
+    Vpre   <-nw_vcov(m_off1,Lpre)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off1)["t"] / sqrt(diag(Vpre)["t"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t 
+    
+    
+    
+    #common_all$CommonAsssumption_Pvalue[kl]<-koblo
+    common_all$CMNassumpZstongerV_Pvalue[kl]<-koblo
+    if (koblo<0.05){
+      countPlesalphaZCITS_SngerV=countPlesalphaZCITS_SngerV+1 
+    }else{
+      countPlesalphaZCITS_SngerV<-countPlesalphaZCITS_SngerV+0
+    }
+    
+    
+    
+    
+    #print(nk)
+    ##fitting common trend model with control as offset
+    #if (!requireNamespace("MASS", quietly = TRUE)) install.packages("MASS")
+    #library(MASS)
+    #lagnewest
+    if(lagnewestPRE_postCombine>0){
+      L<-lagnewestPRE_postCombine
+    }else{
+      L<- floor(nrow(nkkdt)^(1/4)) 
+    }
+    print(paste("Lag for whole period is",L,sep=""))
+    m_off<- glm(Y ~P+ offset(log(Z+delta)),
+                family =fam_nb, data =nkkdt)
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    
+    Vpre   <-nw_vcov(m_off,L)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off)["P"] / sqrt(diag(Vpre)["P"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t  
+    
+    
+    
+    
+    ##fill coefficeints
+    common_all$P_estimateCITS[kl]<-coef(m_off)["P"]
+    common_all$Pstd_estimateCITS[kl]<-sqrt(diag(Vpre)["P"])
+    
+    if (koblo<0.05){
+      power_CITS<-power_CITS+1
+      #power_Trdfull
+      #power_TrdnoX1
+      #power_Trdno_t
+    }else{
+      power_CITS<-power_CITS+0
+    }
+    
+    
+    
+    
+    ##traditional regression 
+    ##with all confounders adjusted
+    m_adj <-glm(Y ~ t + P + X1, family =fam_nb, data =nkkdt)
+    
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"] 
+    if (TrdAR==1){
+      Vpre   <-nw_vcov(m_adj,L)
+      # pull p-value for t using HAC:
+      z_t    <- coef(m_adj)["P"] / sqrt(diag(Vpre)["P"])
+      p_t    <- 2 * pnorm(-abs(z_t))
+      #p_value
+      koblo<-p_t
+      
+      ##update coefficients
+      common_all$P_estimateTrd[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTrd[kl]<-sqrt(diag(Vpre)["P"])
+      
+      if (koblo<0.05){
+        power_Trdfull<-power_Trdfull+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_Trdfull<-power_Trdfull+0
+      }
+      
+    } else{
+      ##No auto-corelation
+      #p_value
+      ## 1. Pearson residuals
+      r_pearson <- residuals(m_adj , type = "pearson")
+      Tlen <- length(r_pearson)
+      ar_fit <- ar(r_pearson, method = "yw", aic = TRUE)
+      common_all$TrdarOrderfull[kl]<-ar_fit$order
+      
+      est<- coef(m_adj)["P"]
+      se<- sqrt(diag(vcov(m_adj)))["P"]
+      z   <- est / se
+      p_wald <- 2 * pnorm(-abs(z))
+      p_wald
+      
+      
+      koblo<-p_wald
+      
+      ##update coefficients
+      common_all$P_estimateTrd[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTrd[kl]<-sqrt(diag(vcov(m_adj)))["P"]
+      
+      if (koblo<0.05){
+        power_Trdfull<-power_Trdfull+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_Trdfull<-power_Trdfull+0
+      }
+      
+      
+    }
+    
+    ##No X1 adjustment
+    m_adj <-glm(Y ~ t + P, family =fam_nb, data =nkkdt)
+    #coefficient
+    if (TrdAR==1){
+      Vpre   <-nw_vcov(m_adj,L)
+      # pull p-value for t using HAC:
+      z_t    <- coef(m_adj)["P"] / sqrt(diag(Vpre)["P"])
+      p_t    <- 2 * pnorm(-abs(z_t))
+      #p_value
+      koblo<-p_t
+      
+      ##update coefficients
+      common_all$P_estimateTrdX1_no[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTrdX1_no[kl]<-sqrt(diag(Vpre)["P"])
+      
+      if (koblo<0.05){
+        power_TrdnoX1<-power_TrdnoX1+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_TrdnoX1<-power_TrdnoX1+0
+      }
+      
+    } else{
+      ##No auto-corelation
+      #p_value
+      est<- coef(m_adj)["P"]
+      se<- sqrt(diag(vcov(m_adj)))["P"]
+      z   <- est / se
+      p_wald <- 2 * pnorm(-abs(z))
+      p_wald
+      
+      
+      koblo<-p_wald
+      
+      ##update coefficients
+      common_all$P_estimateTrdX1_no[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTrdX1_no[kl]<-sqrt(diag(vcov(m_adj)))["P"]
+      
+      if (koblo<0.05){
+        power_TrdnoX1<-power_TrdnoX1+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_TrdnoX1<-power_TrdnoX1+0
+      }
+      
+      
+    }
+    
+    
+    
+    
+    
+    
+    #Traditional regression without time adjustment
+    m_adj <-glm(Y ~P+X1, family=fam_nb, data =nkkdt)
+    #coefficient
+    if (TrdAR==1){
+      Vpre   <-nw_vcov(m_adj,L)
+      # pull p-value for t using HAC:
+      z_t    <- coef(m_adj)["P"] / sqrt(diag(Vpre)["P"])
+      p_t    <- 2 * pnorm(-abs(z_t))
+      #p_value
+      koblo<-p_t
+      
+      ##update coefficients
+      common_all$P_estimateTrd_t_no[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTr_t_no[kl]<-sqrt(diag(Vpre)["P"])
+      
+      if (koblo<0.05){
+        power_Trdno_t<-power_Trdno_t+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_Trdno_t<-power_Trdno_t+0
+      }
+      
+    } else{
+      ##No auto-corelation
+      #p_value
+      est<- coef(m_adj)["P"]
+      se<- sqrt(diag(vcov(m_adj)))["P"]
+      z   <- est / se
+      p_wald <- 2 * pnorm(-abs(z))
+      p_wald
+      
+      
+      koblo<-p_wald
+      
+      ##update coefficients
+      common_all$P_estimateTrd_t_no[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTr_t_no[kl]<-sqrt(diag(vcov(m_adj)))["P"]
+      
+      if (koblo<0.05){
+        power_Trdno_t<-power_Trdno_t+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_Trdno_t<-power_Trdno_t+0
+      }
+      
+      
+    }
+    
+    
+    
+    
+    
+    
+    
+    kl<-kl+1
+  } 
+  # Return a list containing the data frame and additional variables
+  return(list(
+    common_all = common_all,
+    power_CITS = power_CITS,
+    power_Trdfull = power_Trdfull,
+    power_TrdnoX1 = power_TrdnoX1,
+    power_Trdno_t = power_Trdno_t,
+    countPlessAlphaCITS = countPlessAlphaCITS,
+    countPlesalphaZCITS_SngerV = countPlesalphaZCITS_SngerV,
+    sumzeroZ = sumzeroZ,
+    sumnonzeroZ = sumnonzeroZ
+  ))
+  #k<-1
+}
+
+
+
+
+# Ensure you have the full data (not filtered to one scenario)
+common_all<- readRDS("data/SimulatedData.rds")
+
+# helper to get pretty labels
+.scen_label <- function(scen_key) {
+  if (scen_key == "minimum")  return(list(lab="Small",    eff="log0.96"))
+  if (scen_key == "Expected") return(list(lab="Moderate", eff="log0.7"))
+  return(list(lab="Large",     eff="log0.6"))
+}
+
+# small offset to allow log-scale
+eps_plot <-0.0001  # you already defined delta = 1e-4
+
+# core painter for ONE scenario (uses Z only)
+.make_panel_data <- function(d_scen) {
+  # run your analysis pipeline within this scenario to populate p-values etc.
+  d_scen <- d_scen %>% arrange(j, t)
+  gh_s   <- max(d_scen$j, na.rm = TRUE)
+  
+  # reuse your function (TrdAR = 1; HAC lags auto by n^(1/4))
+  res <- common_allx(d_scen, TrdAR = 1)
+  dd  <- res$common_all
+  
+  # compute scenario-specific rejection rate for common-trend test (Z true)
+  p_ok <- dd$CommonAsssumption_Pvalue[!is.na(dd$CommonAsssumption_Pvalue)]
+  rej_rate <- mean(p_ok < 0.05) * 100
+  
+  # first dataset under this scenario
+  dat   <- subset(dd, j == 1)
+  t0s   <- dat$t[dat$P == 1][1]
+  datpre <- subset(dat, t < t0s)
+  
+  # choose plotting scale (log by default like your existing plot)
+  use_log <- TRUE
+  tf  <- function(x) if (use_log) log(x + eps_plot) else x
+  ylab_txt <- if (use_log) "log(Count)" else "Count"
+  
+  list(datpre = datpre, tf = tf, ylab = ylab_txt, t0 = t0s, rej = rej_rate)
+}
+
+# scenarios in the order you want to show
+scenarios <- c("minimum", "Expected", "Maximum")
+
+# build panel inputs
+panels <- lapply(scenarios, function(s) {
+  d_s <- subset(common_all, EstimandScenario == s)
+  out <- .make_panel_data(d_s)
+  meta <- .scen_label(s)
+  out$main_title <- paste0(meta$lab, " (", meta$eff, ")")
+  out
+})
+
+# pick consistent y-limits across panels (so scales are comparable)
+rngs <- lapply(panels, function(p) {
+  with(p$datpre, range(p$tf(Y), p$tf(Z), na.rm = TRUE))
+})
+ylim_all <- range(do.call(rbind, rngs))
+
+# ----- PNG -----
+dir.create("graphs", showWarnings = FALSE)
+png("graphs/prepolicy_loess_Z_true_by_scenario.png", width = 7, height = 9, units = "in", res = 300)
+par(mfcol = c(3,1), mar = c(4,4,1.5,1), oma = c(3,0.5,0.5,0.5), mgp = c(2,0.7,0))
+
+for (i in seq_along(panels)) {
+  pi <- panels[[i]]
+  dp <- pi$datpre
+  tf <- pi$tf
+  
+  # loess fits on chosen scale
+  fitY <- loess(tf(Y) ~ t, data = dp, span = .6, degree = 1, family = "symmetric")
+  fitZ <- loess(tf(Z) ~ t, data = dp, span = .6, degree = 1, family = "symmetric")
+  
+  plot(dp$t, tf(dp$Y), pch = 16, col = "steelblue",
+       xlab = "Time (pre-policy)", ylab = pi$ylab,
+       main = paste0(LETTERS[i], " ", pi$main_title),
+       xlim = c(min(dp$t), pi$t0), ylim = ylim_all)
+  points(dp$t, tf(dp$Z), pch = 16, col = "tomato4")
+  lines(dp$t, predict(fitY), lwd = 3, col = "steelblue4")
+  lines(dp$t, predict(fitZ), lwd = 3, col = "tomato4")
+  
+  legend("topright", c("Y", "Z"),
+         col = c("steelblue4","tomato4"), lty = 1, lwd = 3, bty = "n", cex = .9)
+  legend("topleft",
+         legend = sprintf("Rejection rate = %.0f%%", pi$rej),
+         bty = "n", text.col = "black", cex = 1.0, text.font = 2)
+}
+
+mtext("Pre-policy trends: treated outcome (Y) vs. true control (Z) under three effect sizes",
+      side = 1, outer = TRUE, line = 1.5, cex = .95)
+dev.off()
+
+# ----- PDF (same panels) -----
+pdf("graphs/prepolicy_loess_Z_true_by_scenario.pdf", width = 7, height = 9)
+par(mfcol = c(3,1), mar = c(4,4,1.5,1), oma = c(3,0.5,0.5,0.5), mgp = c(2,0.7,0))
+
+for (i in seq_along(panels)) {
+  pi <- panels[[i]]
+  dp <- pi$datpre
+  tf <- pi$tf
+  
+  fitY <- loess(tf(Y) ~ t, data = dp, span = .6, degree = 1, family = "symmetric")
+  fitZ <- loess(tf(Z) ~ t, data = dp, span = .6, degree = 1, family = "symmetric")
+  
+  plot(dp$t, tf(dp$Y), pch = 16, col = "steelblue",
+       xlab = "Time (pre-policy)", ylab = pi$ylab,
+       main = paste0(LETTERS[i], " ", pi$main_title),
+       xlim = c(min(dp$t), pi$t0), ylim = ylim_all)
+  points(dp$t, tf(dp$Z), pch = 16, col = "tomato4")
+  lines(dp$t, predict(fitY), lwd = 3, col = "steelblue4")
+  lines(dp$t, predict(fitZ), lwd = 3, col = "tomato4")
+  
+  legend("topright", c("Y", "Z"),
+         col = c("steelblue4","tomato4"), lty = 1, lwd = 3, bty = "n", cex = .9)
+  legend("topleft",
+         legend = sprintf("Rejection rate = %.0f%%", pi$rej),
+         bty = "n", text.col = "black", cex = 1.0, text.font = 2)
+}
+
+mtext("Pre-policy trends: treated outcome (Y) vs. true control (Z) under three effect sizes",
+      side = 1, outer = TRUE, line = 1.5, cex = .95)
+dev.off()
