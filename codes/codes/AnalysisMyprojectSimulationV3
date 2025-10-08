@@ -11,72 +11,17 @@ library(dplyr)
 library(tscount)
 library(sandwich)
 library(lmtest)
-
-common_all<-readRDS("data/SimulatedData.rds")
-common_alldup<-readRDS("data/SimulatedData.rds")
-common_all<-common_all[common_all$EstimandScenario=="Expected",]
-#common_all<-common_all[common_all$EstimandScenario=="minimum",]
-#common_all<-common_all[common_all$EstimandScenario=="Maximum",]
-t0<-common_all$t0[1]
-tq<-common_all$tq[1]
-print(t0)
-print(tq)
-##drop these unnecessary columns
-common_all$t0<-NULL
-common_all$tq<-NULL
-nrow(common_all)
-View(common_all)
-#Analysis
-#delta correction
-delta<-0.0001
-
-##Trying analysis with group by command
-library(dplyr)
 library(broom)
 library(MASS)
 
-#by_sim_coefs <- common_all %>%
-#group_by(j) %>%
-#reframe({
-#d <- cur_data_all() 
-#m <- glm.nb(YPolicyon_X5pct~P+X1+t, data = d)   # change Y to your outcome
-#tidy(m) |>
-#mutate(AIC = AIC(m), logLik = as.numeric(logLik(m)))
-#})
-
-#mean(by_sim_coefs$estimate[(by_sim_coefs$term=="P")])
-#Estimate without adjusting for X2=-0.3539
-
-
-##common trend model
-##testing common trend first log(Z+0.001)
-#datpre<-subset(dat,P==0)
-#m_off1<- glm.nb(Y ~t + offset(log(Z+delta)),
-#data =datpre)
-#summary(m_off1)
-
-## Install + load HAC tools
-#if (!requireNamespace("sandwich", quietly = TRUE)) install.packages("sandwich")
-#if (!requireNamespace("lmtest",    quietly = TRUE)) install.packages("lmtest")
-#library(sandwich)
-#library(lmtest)
-
-#L <-floor(nrow(dat)^(1/4))  # Wooldridge
-#print(L)
-# Compute Newey-West variance-covariance matrix (lag = 3)
-#vcov_nw <- NeweyWest(m_off1, lag =L, prewhite = FALSE, adjust = TRUE)
-
-# Print coefficient table with Newey-West standard errors
-#coeftest(m_off1, vcov = vcov_nw)
-#Calculating Coverage and standard error of coverage
-##Power
+##FUNCTIONS ARENA
 pwaMCSE<-function(powerPERCENT,countfre){
   p<-sqrt((powerPERCENT*(100-powerPERCENT))/(countfre))
   return(p)
 }
 
 
-
+#coverage
 FredCoverageT<-function(d,Estimate,std,thetaTrue,j,alpha=0.05){ 
   xstd<-d[[deparse(substitute(std))]]
   xstd<-xstd[!is.na(xstd)]
@@ -106,7 +51,7 @@ FredCoverageT<-function(d,Estimate,std,thetaTrue,j,alpha=0.05){
 
 
 
-
+#coverage2
 FredCoverage <- function(d, Estimate, Std, thetaTrue, alpha = 0.05) {
   est <- d[[deparse(substitute(Estimate))]]
   se  <- d[[deparse(substitute(Std))]]
@@ -126,8 +71,19 @@ FredCoverage <- function(d, Estimate, Std, thetaTrue, alpha = 0.05) {
 
 
 #Standard error estimate
-fredMC<-function(d,x){
+fredMC<-function(d,x,stdx=NULL){
   #x  <-common_all$P_estimateCITS
+  if (missing(stdx)) {
+    message("standard deviations not supplied")
+    # Code that runs when x is missing
+  } else {
+    xy<-d[[deparse(substitute(stdx))]]
+    xy<- xy[!is.na(xy)]
+    modelBasedSE<-mean((xy)^2,na.rm=TRUE)
+    modelBasedSE<-sqrt(modelBasedSE)
+  }
+  
+  
   x  <-d[[deparse(substitute(x))]]
   x  <- x[!is.na(x)]              # keep non-missing
   R  <- length(x)                 # number of simulations used
@@ -136,7 +92,13 @@ fredMC<-function(d,x){
   empe<-sd(x)
   ci <- m + qnorm(c(.025, .975)) * se   # 95% CI for the mean
   
-  sprintf("mean = %.4f, MCSE(mean) = %.4f, 95%% CI = [%.4f, %.4f],EmpericalSE=%.4f", m, se, ci[1], ci[2], empe)
+  if(!missing(stdx)){
+    ratioSE<-(empe/modelBasedSE)
+    sprintf("mean = %.4f, MCSE(mean) = %.4f, 95%% CI = [%.4f, %.4f],EmpericalSE=%.4f,ModelBasedSE=%.4f,RatioEmpericalOVERModelSE=%.4f", m, se, ci[1], ci[2], empe,modelBasedSE,ratioSE) 
+  } else{
+    sprintf("mean = %.4f, MCSE(mean) = %.4f, 95%% CI = [%.4f, %.4f],EmpericalSE=%.4f", m, se, ci[1], ci[2], empe)
+  }
+  
 }
 
 ##Monte Carlo SE of Estimate of bias
@@ -203,87 +165,104 @@ MCSE_MSE<-function(d,x,True_B){
   return(msce_mse)
 }
 
-
-
-
-
-
-## ----- FIT MODELS -----
-# We'll use MASS::glm.nb for NB2
-if (!requireNamespace("MASS", quietly = TRUE)) install.packages("MASS")
-library(MASS)
-
-#Nwest helper function
-#hac_vcov <- function(model, tvec, L) {
-#sandwich::vcovHAC(model, order.by = tvec, bw = L, prewhite = FALSE)
-#}
-
-nw_vcov<- function(model, L) {
-  sandwich::NeweyWest(model, lag = L, prewhite = FALSE, adjust = TRUE)
-}
-##optimize speed just use 350 dispersion used during simulation.
-fam_nb <- MASS::negative.binomial(350)
-
-
-##generate storing variables
-common_all$dataset<-NA
-
-#confimr observations
-common_all$Allobs<-NA
-common_all$AllobsPre<-NA
-#extract p_valuefor common tren test
-common_all$CommonAsssumption_Pvalue<-NA
-#Z strongerViolationtrend
-common_all$CMNassumpZstongerV_Pvalue<-NA
-
-##Coefficient of time
-common_all$coef_tZcommon<-NA
-common_all$coef_tZstngerV<-NA
-
-
-
-##CITS
-common_all$P_estimateCITS<-NA
-common_all$Pstd_estimateCITS<-NA
-#power_CITS<-0
-#AR order traditional regression na auto-corelation simulated
-common_all$TrdarOrderfull<-NA
-
-##Traditional regression model adjusted for all confounders
-common_all$P_estimateTrd<-NA
-common_all$Pstd_estimateTrd<-NA
-#power_Trdfull<-0
-#Traditional regression without X1 adjustment
-common_all$P_estimateTrdX1_no<-NA
-common_all$Pstd_estimateTrdX1_no<-NA
-#power_TrdnoX1<-0
-
-
-#Traditional regression without time adjustment
-common_all$P_estimateTrd_t_no<-NA
-common_all$Pstd_estimateTr_t_no<-NA
-#power_Trdno_t<-0
-
-
-##keep j<=50 for modifying/tuning coefficients ease.
-#common_all<-common_all%>%filter(j<=50)
-
-gh<-max(common_all$j)
-print(gh)
-kl<-1
-
-##cheking in how many simulations do I not meet common trend assumption Assumption?
-#True non_Violated Z
-#countPlessAlphaCITS=0
-##Violated Z
-#countPlesalphaZCITS_SngerV=0
-
-
-##checking how many of My Z are zero
-#sumzeroZ=0
-#sumnonzeroZ=0
-common_all<-common_all%>%arrange(j,t)
-common_allx<-function(common_all,TrdAR=1,lagnewestPRE_postCombine=0,lagnewestPRE=0){
+##Loading data
+common_all<-readRDS("data/SimulatedData.rds")
+#common_alldup<-readRDS("data/SimulatedData.rds")
+common_all<-common_all[common_all$EstimandScenario=="minimum",]
+visual_fred<-common_all$EstimandScenario[1]
+##Analysis function
+common_allx<-function(common_all,TrdAR=1,delta=0.0001,lagnewestPRE_postCombine=0,lagnewestPRE=0,disP=350){
+  ##Newey-west+Dispersion
+  #Newey-west
+  nw_vcov<- function(model, L) {
+    sandwich::NeweyWest(model, lag = L, prewhite = FALSE, adjust = TRUE)
+  }
+  ##optimize speed just use 350 dispersion used during simulation.
+  fam_nb <- MASS::negative.binomial(disP)
+  
+  #common_all<-common_all[common_all$EstimandScenario=="minimum",]
+  #common_all<-common_all[common_all$EstimandScenario=="Maximum",]
+  t0<-common_all$t0[1]
+  tq<-common_all$tq[1]
+  print(t0)
+  print(tq)
+  ##drop these unnecessary columns
+  common_all$t0<-NULL
+  common_all$tq<-NULL
+  nrow(common_all)
+  View(common_all)
+  #Analysis
+  #delta correction
+  #delta<-0.0001
+  
+  #by_sim_coefs <- common_all %>%
+  #group_by(j) %>%
+  #reframe({
+  #d <- cur_data_all() 
+  #m <- glm.nb(YPolicyon_X5pct~P+X1+t, data = d)   # change Y to your outcome
+  #tidy(m) |>
+  #mutate(AIC = AIC(m), logLik = as.numeric(logLik(m)))
+  #})
+  
+  #mean(by_sim_coefs$estimate[(by_sim_coefs$term=="P")])
+  #Estimate without adjusting for X2=-0.3539
+  
+  
+  
+  
+  #---FITTING MODELS---#
+  ##generate storing variables
+  common_all$dataset<-NA
+  
+  #confimr observations
+  common_all$Allobs<-NA
+  common_all$AllobsPre<-NA
+  #extract p_valuefor common tren test
+  common_all$CommonAsssumption_Pvalue<-NA
+  #Z strongerViolationtrend
+  common_all$CMNassumpZstongerV_Pvalue<-NA
+  
+  ##Coefficient of time
+  common_all$coef_tZcommon<-NA
+  common_all$coef_tZstngerV<-NA
+  
+  
+  
+  ##CITS
+  common_all$P_estimateCITS<-NA
+  common_all$Pstd_estimateCITS<-NA
+  #power_CITS<-0
+  #AR order traditional regression na auto-corelation simulated
+  common_all$TrdarOrderfull<-NA
+  
+  ##Traditional regression model adjusted for all confounders
+  common_all$P_estimateTrd<-NA
+  common_all$Pstd_estimateTrd<-NA
+  #power_Trdfull<-0
+  #Traditional regression without X1 adjustment
+  common_all$P_estimateTrdX1_no<-NA
+  common_all$Pstd_estimateTrdX1_no<-NA
+  #power_TrdnoX1<-0
+  
+  
+  #Traditional regression without time adjustment
+  common_all$P_estimateTrd_t_no<-NA
+  common_all$Pstd_estimateTr_t_no<-NA
+  #power_Trdno_t<-0
+  
+  
+  ##keep j<=50 for modifying/tuning coefficients ease.
+  #common_all<-common_all%>%filter(j<=50)
+  ##cheking in how many simulations do I not meet common trend assumption Assumption?
+  #True non_Violated Z
+  #countPlessAlphaCITS=0
+  ##Violated Z
+  #countPlesalphaZCITS_SngerV=0
+  
+  
+  ##checking how many of My Z are zero
+  #sumzeroZ=0
+  #sumnonzeroZ=0
   ##place holders move them inside
   power_CITS<-0
   power_Trdfull<-0
@@ -300,7 +279,11 @@ common_allx<-function(common_all,TrdAR=1,lagnewestPRE_postCombine=0,lagnewestPRE
   sumzeroZ=0
   sumnonzeroZ=0
   
-  
+  ##Arrange
+  common_all<-common_all%>%arrange(j,t)
+  gh<-max(common_all$j)
+  print(gh)
+  kl<-1
   for (prof in 1:gh) {
     print(paste("Analysing dataset",prof,sep=""))
     #common_all<-common_all%>%arrange(j,t)
@@ -587,7 +570,7 @@ common_allx<-function(common_all,TrdAR=1,lagnewestPRE_postCombine=0,lagnewestPRE
       
       ##update coefficients
       common_all$P_estimateTrd_t_no[kl]<-coef(m_adj)["P"]
-      common_all$Pstd_estimateTr_t_no<-sqrt(diag(vcov(m_adj)))["P"]
+      common_all$Pstd_estimateTr_t_no[kl]<-sqrt(diag(vcov(m_adj)))["P"]
       
       if (koblo<0.05){
         power_Trdno_t<-power_Trdno_t+1
@@ -621,7 +604,7 @@ common_allx<-function(common_all,TrdAR=1,lagnewestPRE_postCombine=0,lagnewestPRE
     sumnonzeroZ = sumnonzeroZ
   ))
 }
-common_all<-common_allx(common_all,0)
+common_all<-common_allx(common_all,1)
 #common_all<-common_allx(common_all)
 #lets try user lag 7
 #common_all<-common_allx(common_all,7)
@@ -646,10 +629,24 @@ propReje_Zokay<-round(((countPlessAlphaCITS/gh)*100),2)
 print(propReje_Zokay)
 
 ##Drawing graph for common trend from first dataset of expected:
-dfre<-common_alldup$EstimandScenario[common_alldup$EstimandScenario=="Expected"]
-vfe<-dfre[1]
-print(vfe)
+#visual_fred<-common_all$EstimandScenario[1]
+#common_all<-common_all[common_all$EstimandScenario=="minimum",]
+#common_all<-common_all[common_all$EstimandScenario=="Maximum",]
+#dfre<-common_alldup$EstimandScenario[common_alldup$EstimandScenario=="Expected"]
+vfe<-visual_fred
 if (vfe=="Expected"){
+  joka<-"Moderate"
+  scen<-paste("(",joka," ","log0.7",")",sep ="")
+} else if (vfe=="minimum"){
+  joka<-"Small"
+  scen<-paste("(",joka," ","log0.96",")",sep ="")
+}else{
+  joka<-"Large" 
+  scen<-paste("(",joka," ","log0.6",")",sep ="")
+}
+
+print(vfe)
+if (vfe=="minimum"){
   dat  <- subset(common_all, j == 1)
   t0   <- dat$t[dat$P == 1][1]
   datpre <- subset(dat, t < t0)   # safer than P==0
@@ -663,16 +660,24 @@ if (vfe=="Expected"){
   fitY_A <- loess(tf(Y) ~ t, data = datpre, span=.6, degree=1, family="symmetric")
   fitZ_A <- loess(tf(Z) ~ t, data = datpre, span=.6, degree=1, family="symmetric")
   fitY_B <- loess(tf(Y) ~ t, data = datpre, span=.6, degree=1, family="symmetric")
-  fitZ_B <- loess(tf(ZmStrongerparaV) ~ t, data = datpre, span=.4, degree=1, family="symmetric")
+  fitZ_B <- loess(tf(ZmStrongerparaV) ~ t, data = datpre, span=.6, degree=1, family="symmetric")
   
   ## -------- PNG --------
   png("graphs/prepolicy_loess_stacked.png", width = 7, height = 9, units = "in", res = 300)
   par(mfcol = c(2,1), mar = c(4,4,1.5,1), oma = c(3,0.5,0.5,0.5), mgp = c(2,0.7,0))
-  
+  #png("graphs/prepolicy_loess_stacked.png")
   # Panel A
+  yA  <- tf(datpre$Y)
+  zA  <- tf(datpre$Z)
+  ylimA <- range(yA, zA, na.rm = TRUE)
+  
+  yB  <- tf(datpre$Y)
+  zB  <- tf(datpre$ZmStrongerparaV)
+  ylimB <- range(yB, zB, na.rm = TRUE)
+  
   plot(datpre$t, tf(datpre$Y), pch=16, col="steelblue",
-       xlab="Time (pre-policy)", ylab=ylab_txt, main="A",
-       xlim=c(min(datpre$t), t0))
+       xlab="Time (pre-policy)", ylab=ylab_txt, main=paste("A","(",scen,")"),
+       xlim=c(min(datpre$t), t0),ylim=ylimA )
   points(datpre$t, tf(datpre$Z), pch=16, col="tomato4")
   lines(datpre$t, predict(fitY_A), lwd=3, col="steelblue4")
   lines(datpre$t, predict(fitZ_A), lwd=3, col="tomato4")
@@ -685,13 +690,13 @@ if (vfe=="Expected"){
   
   # Panel B
   plot(datpre$t, tf(datpre$Y), pch=16, col="steelblue",
-       xlab="Time (pre-policy)", ylab=ylab_txt, main="B",
-       xlim=c(min(datpre$t), t0))
+       xlab="Time (pre-policy)", ylab=ylab_txt, main=paste("B","(",scen,")"),
+       xlim=c(min(datpre$t), t0),ylim=ylimB)
   points(datpre$t, tf(datpre$ZmStrongerparaV), pch=16, col="tomato4")
   lines(datpre$t, predict(fitY_B), lwd=3, col="steelblue4")
   lines(datpre$t, predict(fitZ_B), lwd=3, col="tomato4")
   #abline(v=t0, lty=8, col="black"); grid()
-  legend("topright", c("Y","Z"),
+  legend("topright", c("Y","Z_vio"),
          col=c("steelblue4","tomato4"), lty=1, lwd=3, bty="n", cex=.9)
   legend("topleft",
          legend=sprintf("Rejection rate= %.0f%%", ifelse(propReje_ZV<=1, 100*propReje_ZV, propReje_ZV)),
@@ -702,13 +707,14 @@ if (vfe=="Expected"){
   dev.off()
   
   ## -------- PDF (repeat the same two panels) --------
+  #graphs/prepolicy_loess_stacked.png
   pdf("graphs/prepolicy_loess_stacked.pdf", width = 7, height = 9)
   par(mfcol = c(2,1), mar = c(4,4,1.5,1), oma = c(3,0.5,0.5,0.5), mgp = c(2,0.7,0))
   ## (repeat the two panel blocks exactly as above)
   # Panel A
   plot(datpre$t, tf(datpre$Y), pch=16, col="steelblue",
-       xlab="Time (pre-policy)", ylab=ylab_txt, main="A",
-       xlim=c(min(datpre$t), t0))
+       xlab="Time (pre-policy)", ylab=ylab_txt, main=paste("A","(",scen,")"),
+       xlim=c(min(datpre$t), t0),ylim=ylimA)
   points(datpre$t, tf(datpre$Z), pch=16, col="tomato4")
   lines(datpre$t, predict(fitY_A), lwd=3, col="steelblue4")
   lines(datpre$t, predict(fitZ_A), lwd=3, col="tomato4")
@@ -721,13 +727,13 @@ if (vfe=="Expected"){
   
   # Panel B
   plot(datpre$t, tf(datpre$Y), pch=16, col="steelblue",
-       xlab="Time (pre-policy)", ylab=ylab_txt, main="B",
-       xlim=c(min(datpre$t), t0))
+       xlab="Time (pre-policy)", ylab=ylab_txt, main=paste("B","(",scen,")"),
+       xlim=c(min(datpre$t), t0),ylim=ylimB)
   points(datpre$t, tf(datpre$ZmStrongerparaV), pch=16, col="tomato4")
   lines(datpre$t, predict(fitY_B), lwd=3, col="steelblue4")
   lines(datpre$t, predict(fitZ_B), lwd=3, col="tomato4")
   #abline(v=t0, lty=8, col="black"); grid()
-  legend("topright", c("Y","Z"),
+  legend("topright", c("Y","Z_vio"),
          col=c("steelblue4","tomato4"), lty=1, lwd=3, bty="n", cex=.9)
   legend("topleft",
          legend=sprintf("Rejection rate= %.0f%%", ifelse(propReje_ZV<=1, 100*propReje_ZV, propReje_ZV)),
@@ -782,7 +788,7 @@ CITS_Pmean<-mean(common_all$P_estimateCITS,na.rm =TRUE)
 print(CITS_Pmean)
 
 ##standard error of Estimate(overal)
-fredMC(common_all,P_estimateCITS)
+fredMC(common_all,P_estimateCITS,Pstd_estimateCITS)
 #MCSE of bias
 MCSE_bias(common_all,P_estimateCITS)
 ##MSE
