@@ -11,9 +11,6 @@ library(withr)
 if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
 library(dplyr)
 library(tscount)
-#setting seed
-RNGkind(kind = "Mersenne-Twister", normal.kind = "Inversion", sample.kind = "Rejection")
-set.seed(123)
 #parameters
 x1drop_schock<--0.9 
 driftX1<-0.000 #0.015
@@ -41,7 +38,10 @@ lagpstT0X1<-15
 DifferentZSlope<-c(-0.0035,-0.0020,-0.0005)
 ## -0.0001 tune qudratic term its a problem
 EstimandMain<- -0.36
-fredSiProject<-function(nsim,seasonalX,vcoeffsY,vcoeffsZ,rhofd, sigma2fd,n,u_s=0,genX2=TRUE,prop_MedX2=0.2,tensX2=1000,meanpreX2=2000){ ##Let var be 3 times the mean. mean to variance ration for choosing overdispersion.Chose mean to var ratio of 2;mean=B0
+fredSiProject<-function(nsim,seasonalX,vcoeffsY,vcoeffsZ,rhofd, sigma2fd,n,u_s=0,genX2=TRUE,prop_MedX2=0.2,tensX2=1000,meanpreX2=2000,seed=123){ ##Let var be 3 times the mean. mean to variance ration for choosing overdispersion.Chose mean to var ratio of 2;mean=B0
+  #setting seed
+  RNGkind(kind = "Mersenne-Twister", normal.kind = "Inversion", sample.kind = "Rejection")
+  set.seed(seed)
 #sim_listcommonBO_Expected<-list()
 #sim_listcommonBO_MinEf<-list()
 #sim_listcommonBO_MaxEf<-list()
@@ -476,7 +476,28 @@ list(sim_listcommonBO_MinEf=sim_listcommonBO_MinEf, sim_listcommonBO_Expected=si
   }
   
 ##running this function to generate shared and unshared confounder# run u_s=0 for not adding AR(1)
-out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =1,genX2=TRUE)
+# Run with identical seed inside the function for fairness
+##COMAPRE SIMULATED Y in 10 simulations
+o_false <- fredSiProject(10, seasonalX, vcoeffsY, vcoeffsZ,
+                         0.4, 0.1, 150, u_s = 1, genX2 = FALSE)
+
+o_true  <- fredSiProject(10, seasonalX, vcoeffsY, vcoeffsZ,
+                         0.4, 0.1, 150, u_s = 1, genX2 = TRUE)
+
+# Extract the same scenario from both
+f0 <- do.call(rbind, o_false$sim_listcommonBO_Expected)[, c("j","t","Y")]
+f1 <- do.call(rbind, o_true$sim_listcommonBO_Expected) [, c("j","t","Y")]
+
+# Align and compare Y
+o <- order(f0$j, f0$t); p <- order(f1$j, f1$t)
+all_equal <- all(f0$Y[o] == f1$Y[p])
+all_equal
+
+
+
+
+##RUN MAIN simulation
+out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =1,genX2=FALSE)
 names(out)
 #out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =0)
 #names(out)
