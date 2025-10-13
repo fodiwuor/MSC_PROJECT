@@ -152,8 +152,10 @@ oyaoya<-1
       #B_x2<-paraneterX[3]
       #X2 soem of effect is throught indirect effect
       #.__rng_before <- .Random.seed
-      seed_before <- .Random.seed
-      if (genX2==TRUE) with_seed(123+i,{
+      #seed_before <- .Random.seed
+      if (genX2==TRUE) with_preserve_seed({
+        #seed_before <- .Random.seed
+        #set.seed(seed + i)
         T_total   <- B2                      # Interpret vcoeffsY[jek] as TOTAL
         p_share   <- prop_MedX2
         #beta_X2   <- log(0.98)               # −2% per +1 scaled unit (per +1000 visits)
@@ -171,11 +173,11 @@ oyaoya<-1
         
         # Scaled mediator used in Y model (center + divide by tensX2)
         X2_scaled <- (X2_raw - mu_pre_obs) / tensX2
-        
+        #.Random.seed <- seed_before
       })else{
         print(" ")
       }
-      .Random.seed <- seed_before
+      #.Random.seed <- seed_before
       
       etaX2_1pointFivepct<-BO_x2+B1_x2*t+b1_1Pfivepct*(as.integer(t>=(t0+lagX2)))+rnorm(T, 0, 0.20)
       mu  <- exp(etaX2_1pointFivepct)
@@ -324,12 +326,15 @@ oyaoya<-1
         #muZ  <- exp(etaZ)
         #Z_unCurve<- rnbinom(T, size = thetaZ, mu = muZ)
         ##Y mediated
-        if (genX2==TRUE){
-          etaYM<-B0 + B1*t + DE*P + B3*X1 + B4*(t^2) + beta_X2 * X2_scaled  #Policy increases X by 2%
+        if (genX2==TRUE) with_preserve_seed({
+          #seed_before <- .Random.seed
+          #set.seed(seed + i)
+          etaYM<-B0 + B1*t + DE*P + B3*X1 + B4*(t^2) + beta_X2 * X2_scaled+u #Policy increases X by 2%
           muY<- exp(etaYM)
           Y_aff<- rnbinom(T, size = thetaY, mu = muY)
           dat<- data.frame(t,Y_aff,X2_scaled,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
-        }else{
+          #.Random.seed <- seed_before
+        })else{
           dat<- data.frame(t,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
         }
 
@@ -432,12 +437,15 @@ oyaoya<-1
         #muZ  <- exp(etaZ)
         #Z_unCurve<- rnbinom(T, size = thetaZ, mu = muZ)
         ##Y mediated
-        if (genX2==TRUE){
-          etaYM<-B0 + B1*t + DE*P + B3*X1 + B4*(t^2) + beta_X2 * X2_scaled  #Policy increases X by 2%
+        if (genX2==TRUE) with_preserve_seed({
+          #seed_before <- .Random.seed
+          #set.seed(seed + i)
+          etaYM<-B0 + B1*t + DE*P + B3*X1 + B4*(t^2) + beta_X2 * X2_scaled #Policy increases X by 2%
           muY<- exp(etaYM)
           Y_aff<- rnbinom(T, size = thetaY, mu = muY)
           dat<- data.frame(t,Y_aff,X2_scaled,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
-        }else{
+          #.Random.seed <- seed_before
+        })else{
           dat<- data.frame(t,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
         }
         
@@ -497,7 +505,7 @@ all_equal
 
 
 ##RUN MAIN simulation
-out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =1,genX2=FALSE)
+out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =1,genX2=TRUE)
 names(out)
 #out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =0)
 #names(out)
