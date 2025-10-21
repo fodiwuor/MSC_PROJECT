@@ -1,0 +1,1530 @@
+##read my data(Expted B2 analysis)
+##load packages
+##Package area.Load packages
+rm(list = ls(all.names = TRUE), envir = .GlobalEnv)
+
+if (!requireNamespace("MASS", quietly = TRUE)) install.packages("MASS")
+library(MASS)
+
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
+library(dplyr)
+library(tscount)
+library(sandwich)
+library(lmtest)
+library(broom)
+library(MASS)
+
+##FUNCTIONS ARENA
+pwaMCSE<-function(powerPERCENT,countfre){
+  p<-sqrt((powerPERCENT*(100-powerPERCENT))/(countfre))
+  return(p)
+}
+
+
+#coverage
+FredCoverageT<-function(d,Estimate,std,thetaTrue,j,alpha=0.05){ 
+  xstd<-d[[deparse(substitute(std))]]
+  xstd<-xstd[!is.na(xstd)]
+  n<-length(xstd) 
+  print(length(xstd)) 
+  estimate_theta<-d[[deparse(substitute(Estimate))]] 
+  estimate_theta<-estimate_theta[!is.na(estimate_theta)]
+  print(length(estimate_theta)) 
+  z_crit <- qnorm(1 - alpha/2) 
+  marginError<-(z_crit*xstd) 
+  countcurve<-0  #maxjk<-max(d[[deparse(substitute(j))]]) 
+  for (i in 1:n) { 
+    letmi <- marginError[i] 
+    estimate_thetaf <-estimate_theta[i] 
+    if ((estimate_thetaf - letmi) <= thetaTrue && thetaTrue <= (estimate_thetaf + letmi)) { 
+      countcurve <- countcurve + 1 
+    } 
+    else { countcurve <- countcurve + 0 # redundant; can be removed } 
+    } 
+    
+  }
+  cover<-(countcurve/n) 
+  MCSE_cover<-sqrt((cover*(1-cover))/(n)) 
+  print(paste("Coverage is:",cover,"Its MCSE is:",MCSE_cover)) 
+}
+
+
+
+
+#coverage2
+FredCoverage <- function(d, Estimate, Std, thetaTrue, alpha = 0.05) {
+  est <- d[[deparse(substitute(Estimate))]]
+  se  <- d[[deparse(substitute(Std))]]
+  
+  ok <- is.finite(est) & is.finite(se)   # joint mask
+  est <- est[ok];  se <- se[ok]
+  
+  n <- length(est)
+  if (n == 0) stop("No finite (estimate, SE) pairs.")
+  z <- qnorm(1 - alpha/2)
+  
+  cover <- mean((est - z*se) <= thetaTrue & thetaTrue <= (est + z*se))
+  mcse  <- sqrt(cover * (1 - cover) / n)
+  
+  list(coverage = cover, mcse = mcse, n = n)
+}
+
+
+#Bias
+bias <- function(d, estimate, true_value) {
+  est <- d[[deparse(substitute(estimate))]]
+  est <- est[!is.na(est)]
+  meanest <-round(mean(est, na.rm = TRUE),4)
+  print(paste("The Estimated value is:",meanest ,sep=""))
+  true_value<-round(true_value,4)
+  print(paste("The true value/Estimand is:",true_value,sep=""))
+  Bias <- meanest -true_value
+  Bias_percent <- round(abs(Bias / true_value) * 100, 2)
+  return(list(Bias = Bias, Bias_percent = Bias_percent))
+}
+
+
+
+
+#Standard error estimate
+fredMC<-function(d,x,stdx=NULL){
+  #x  <-common_all$P_estimateCITS
+  if (missing(stdx)) {
+    message("standard deviations not supplied")
+    # Code that runs when x is missing
+  } else {
+    xy<-d[[deparse(substitute(stdx))]]
+    xy<- xy[!is.na(xy)]
+    modelBasedSE<-mean((xy)^2,na.rm=TRUE)
+    modelBasedSE<-sqrt(modelBasedSE)
+  }
+  
+  
+  x  <-d[[deparse(substitute(x))]]
+  x  <- x[!is.na(x)]              # keep non-missing
+  R  <- length(x)                 # number of simulations used
+  m  <-mean(x)                   # your printed mean
+  se <- sd(x) / sqrt(R)           # SE of the mean (MCSE)
+  empe<-sd(x)
+  ci <- m + qnorm(c(.025, .975)) * empe  # 95% CI for the mean
+  
+  if(!missing(stdx)){
+    ratioSE<-(empe/modelBasedSE)
+    sprintf("mean = %.4f, MCSE(mean) = %.4f, 95%% CI = [%.4f, %.4f],EmpericalSE=%.4f,ModelBasedSE=%.4f,RatioEmpericalOVERModelSE=%.4f", m, se, ci[1], ci[2], empe,modelBasedSE,ratioSE) 
+  } else{
+    sprintf("mean = %.4f, MCSE(mean) = %.4f, 95%% CI = [%.4f, %.4f],EmpericalSE=%.4f", m, se, ci[1], ci[2], empe)
+  }
+  
+}
+
+##Monte Carlo SE of Estimate of bias
+MCSE_bias<-function(d,x){
+  x  <-d[[deparse(substitute(x))]]
+  x  <- x[!is.na(x)]
+  R  <- length(x) 
+  n_minus1<-(R -1)
+  theta<-mean(x)
+  dif<-(x-theta)^2
+  #print(x)
+  summation<-sum(dif)
+  denomimator<-(n_minus1*R)
+  workMath<-(sum(dif)/(n_minus1*R))
+  resultsBias<-sqrt(workMath)
+  return(resultsBias)
+}
+
+
+##MSE
+MSE<-function(d,x,True_B){
+  if (is.character(x)) {
+    x<- d[[x]]
+  }else {
+    r<-deparse(substitute(x))
+    x<- d[[r]]
+  }
+  #x<- d[[pos]]
+  x  <- x[!is.na(x)]
+  R  <- length(x) 
+  #n_minus1<-(R -1)
+  theta<-True_B
+  dif<-(x-theta)^2
+  #print(x)
+  #summation<-sum(dif)
+  #denomimator<-(n_minus1*R)
+  workMath<-(sum(dif)/(R))
+  resultsBias<-workMath
+  return(resultsBias)
+}
+
+
+
+##MCSE of MSE
+MCSE_MSE<-function(d,x,True_B){
+  rt1<-deparse(substitute(x)) 
+  #print(rt1)
+  rt<-d
+  #print(rt1)
+  truthf<-True_B
+  zmse<-MSE(rt,rt1,truthf)
+  print(zmse)
+  x  <-d[[deparse(substitute(x))]]
+  x  <- x[!is.na(x)]
+  R  <- length(x) 
+  #n_minus1<-(R -1)
+  theta<-True_B
+  dif<-(x-theta)^2
+  dif2<-(dif-zmse)^2
+  #summation<-sum(dif)
+  #denomimator<-(n_minus1*R)
+  workMath<-(sum(dif2)/(R*(R-1)))
+  msce_mse<-sqrt(workMath)
+  return(msce_mse)
+}
+
+##Loading data
+delta=0.0001
+common_all<-readRDS("data/SimulatedData.rds")
+common_alldup<-readRDS("data/SimulatedData.rds")
+common_all<-common_all[common_all$EstimandScenario=="minimum",]
+#common_all<-common_all[common_all$EstimandScenario=="Expected",]
+#common_all<-common_all[common_all$EstimandScenario=="Maximum",]
+visual_fred<-common_all$EstimandScenario[1]
+print(visual_fred)
+##Analysis function
+common_allx<-function(common_all,TrdAR=1,AutomaBandAR=2,delta=0.0001,lagnewestPRE_postCombine=0,lagnewestPRE=0,disP=350){
+  ##Newey-west+Dispersion
+  #Newey-west
+  if (AutomaBandAR==1){
+    nw_vcov<- function(model,L,t_index=NULL) {
+      sandwich::NeweyWest(model, lag =NULL,prewhite =TRUE, adjust = TRUE)
+      #Lolipop <- sandwich::bwNeweyWest(model, order.by = t_index, prewhite = TRUE)
+    } 
+    
+    nw_vcovpre<- function(model,L,t_index=NULL) {
+      #sandwich::NeweyWest(model, lag =NULL,prewhite =TRUE, adjust = TRUE)
+      Lolipop <- sandwich::bwNeweyWest(model, order.by = t_index, prewhite = TRUE)
+      return(Lolipop)
+    } 
+    
+  } else if (AutomaBandAR==2){ #Christian Botomley style
+    nw_vcov<- function(model, L) {
+      sandwich::NeweyWest(model, lag = L, prewhite = FALSE, adjust = TRUE)
+    }
+  } else{
+    nw_vcov<- function(model, L) {
+      sandwich::NeweyWest(model, lag = L, prewhite =TRUE, adjust = TRUE)
+    }
+  }
+    
+  ##optimize speed just use 350 dispersion used during simulation.
+  fam_nb <- MASS::negative.binomial(disP)
+  
+  #common_all<-common_all[common_all$EstimandScenario=="minimum",]
+  #common_all<-common_all[common_all$EstimandScenario=="Maximum",]
+  t0<-common_all$t0[1]
+  tq<-common_all$tq[1]
+  print(t0)
+  print(tq)
+  ##drop these unnecessary columns
+  common_all$t0<-NULL
+  common_all$tq<-NULL
+  nrow(common_all)
+  View(common_all)
+  #Analysis
+  #delta correction
+  #delta<-0.0001
+  
+  #by_sim_coefs <- common_all %>%
+  #group_by(j) %>%
+  #reframe({
+  #d <- cur_data_all() 
+  #m <- glm.nb(YPolicyon_X5pct~P+X1+t, data = d)   # change Y to your outcome
+  #tidy(m) |>
+  #mutate(AIC = AIC(m), logLik = as.numeric(logLik(m)))
+  #})
+  
+  #mean(by_sim_coefs$estimate[(by_sim_coefs$term=="P")])
+  #Estimate without adjusting for X2=-0.3539
+  
+  
+  
+  
+  #---FITTING MODELS---#
+  ##generate storing variables
+  common_all$dataset<-NA
+  
+  #confimr observations
+  common_all$Allobs<-NA
+  common_all$AllobsPre<-NA
+  #extract p_valuefor common tren test
+  common_all$CommonAsssumption_Pvalue<-NA
+  
+  #Strong
+  common_all$CMNassumpZstongeV_Pvalue<-NA
+  
+  #Z MILD
+  common_all$CMNassumpZMildV_Pvalue<-NA
+  #Z strongerViolationtrend
+  common_all$CMNassumpZstongerV_Pvalue<-NA
+  
+  ##Coefficient of time
+  common_all$coef_tZcommon<-NA
+  common_all$coef_tZstngerV<-NA
+  
+  common_all$coef_tZstrongV<-NA
+  common_all$coef_tZMildV<-NA
+  
+  
+  
+  ##CITS
+  common_all$P_estimateCITS<-NA
+  common_all$Pstd_estimateCITS<-NA
+  #power_CITS<-0
+  ##CITS with contamination/spillover effect.
+  #ZsameDirSpil_1Pfivepct
+  common_all$P_estimateCITS_Spil5pct<-NA
+  common_all$Pstd_estimateCITS_Spil5pct<-NA
+  common_all$P_pValueCITS_Spil5pct<-NA
+  
+  common_all$P_estimateCITS_Spil10pct<-NA
+  common_all$Pstd_estimateCITS_Spil10pct<-NA
+  common_all$P_pValueCITS_Spil10pct<-NA
+  
+  common_all$P_estimateCITS_Spil15Decpct<-NA
+  common_all$Pstd_estimateCITS_Spil15Decpct<-NA
+  common_all$P_pValueCITS_Spil15Decpct<-NA
+  
+  
+  common_all$P_estimateCITS_Spil15Incpct<-NA
+  common_all$Pstd_estimateCITS_Spil15Incpct<-NA
+  common_all$P_pValueCITS_Spil15Incpct<-NA
+  
+  #AR order traditional regression na auto-corelation simulated
+  common_all$TrdarOrderfull<-NA
+  
+  ##Traditional regression model adjusted for all confounders
+  common_all$P_estimateTrd<-NA
+  common_all$Pstd_estimateTrd<-NA
+  #power_Trdfull<-0
+  #Traditional regression without X1 adjustment
+  common_all$P_estimateTrdX1_no<-NA
+  common_all$Pstd_estimateTrdX1_no<-NA
+  common_all$P_pValueCITS<-NA
+  #power_TrdnoX1<-0
+  
+  
+  #Traditional regression without time adjustment
+  common_all$P_estimateTrd_t_no<-NA
+  common_all$Pstd_estimateTr_t_no<-NA
+  #power_Trdno_t<-0
+  
+  
+  ##keep j<=50 for modifying/tuning coefficients ease.
+  #common_all<-common_all%>%filter(j<=50)
+  ##cheking in how many simulations do I not meet common trend assumption Assumption?
+  #True non_Violated Z
+  #countPlessAlphaCITS=0
+  ##Violated Z
+  #countPlesalphaZCITS_SngerV=0
+  
+  
+  ##checking how many of My Z are zero
+  #sumzeroZ=0
+  #sumnonzeroZ=0
+  ##place holders move them inside<-0
+  power_CITS5pct<-0
+  power_CITS10pct<-0
+  power_CITS15Decpct<-0
+  power_CITS15Incpct<-0
+  power_CITS<-0
+  power_Trdfull<-0
+  power_TrdnoX1<-0
+  power_Trdno_t<-0
+  ##cheking in how many simulations do I not meet common trend assumption Assumption?
+  #True non_Violated Z
+  countPlessAlphaCITS=0
+  ##Mildviolation
+  countPlessAlphaCITS_mildV=0
+  #strongViolation
+  countPlessAlphaCITS_strongV=0
+  ##Violated Z
+  countPlesalphaZCITS_SngerV=0
+  
+  
+  ##checking how many of My Z are zero
+  sumzeroZ=0
+  sumnonzeroZ=0
+  
+  ##Arrange
+  common_all<-common_all%>%arrange(j,t)
+  gh<-max(common_all$j)
+  print(gh)
+  kl<-1
+  for (prof in 1:gh) {
+    print(paste("Analysing dataset",prof,sep=""))
+    #common_all<-common_all%>%arrange(j,t)
+    common_all$dataset[kl]<-prof
+    nk<-nrow(common_all[common_all$j==prof,])
+    nkpre<-nrow(common_all[((common_all$j==prof) & (common_all$t<t0)),])
+    common_all$Allobs[kl]<-nk
+    common_all$AllobsPre[kl]<-nkpre
+    nkkdt<-common_all[common_all$j==prof,]
+    klf<-min(nkkdt$Z)
+    if (klf<=0){
+      print(paste("ZERO is in dataset",prof,"for Z",sep =""))
+      sumzeroZ<-sumzeroZ+1 
+    }else{
+      sumnonzeroZ<-sumnonzeroZ+1
+    }
+    
+    
+    
+    ##testing common trend first
+    #datpre<-subset(dat,P==0)
+    prenkt<-common_all[((common_all$j==prof) & (common_all$t<t0)),]
+    if(lagnewestPRE>0){
+      Lpre<-lagnewestPRE
+    }else{
+      Lpre<- floor(nrow(prenkt)^(1/4)) 
+    }
+    #print(paste("Lag for PRE intervention is",Lpre,sep=""))
+    #m_off1<- glm.nb(Y ~t + offset(log(Z+delta)),
+    #data =prenkt)
+    
+    # Compute Newey-West variance-covariance matrix (lag = 3)
+    #vcov_nw <- NeweyWest(m_off1, lag =Lpre, prewhite = FALSE, adjust = TRUE)
+    
+    # Print coefficient table with Newey-West standard errors
+    #ct11<-coeftest(m_off1, vcov = vcov_nw)
+    
+    #koblo<- ct11["t", grep("^Pr\\(", colnames(ct11), value = TRUE)]
+    
+    
+    ## (a) Pre-policy common-trend test (keep HAC)
+    m_off1 <- glm(Y ~ t + offset(log(Z + delta)),
+                  family =fam_nb, data = prenkt)
+    
+    
+    if (AutomaBandAR==1){
+      Lpre<-nw_vcovpre(m_off1,Lpre,prenkt$t)
+    }else{
+      Lpre<-Lpre
+    }
+    
+    print(paste("Lag for PRE intervention is",Lpre,sep=""))
+    
+    Vpre   <-nw_vcov(m_off1,Lpre)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off1)["t"] / sqrt(diag(Vpre)["t"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t 
+    
+    
+    
+    
+    ##extracting Evidence of meeting common trend assumption
+    ##countPlesalphaZCITS_SngerV
+    common_all$CommonAsssumption_Pvalue[kl]<-koblo
+    common_all$coef_tZcommon[kl]<-coef(m_off1)["t"]
+    
+    
+    if (koblo<=0.05){
+      countPlessAlphaCITS=countPlessAlphaCITS+1 
+    }else{
+      countPlessAlphaCITS<-countPlessAlphaCITS+0
+    }
+    
+    #datpre<-subset(dat,P==0)
+    #Z stongerViolation Common trend
+    m_off1 <- glm(Y ~ t + offset(log(ZmStrongerparaV+delta)),
+                  family =fam_nb, data = prenkt)
+    #coefficient
+    common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    
+    Vpre   <-nw_vcov(m_off1,Lpre)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off1)["t"] / sqrt(diag(Vpre)["t"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t 
+    
+    
+    
+    #common_all$CommonAsssumption_Pvalue[kl]<-koblo
+    common_all$CMNassumpZstongerV_Pvalue[kl]<-koblo
+    if (koblo<=0.05){
+      countPlesalphaZCITS_SngerV=countPlesalphaZCITS_SngerV+1 
+    }else{
+      countPlesalphaZCITS_SngerV<-countPlesalphaZCITS_SngerV+0
+    }
+    
+    
+    #strongViolation
+    m_off1 <- glm(Y ~ t + offset(log(ZmStrongparaV+delta)),
+                  family =fam_nb, data = prenkt)
+    #coefficient
+    common_all$coef_tZstrongV[kl]<-coef(m_off1)["t"]
+    
+    Vpre   <-nw_vcov(m_off1,Lpre)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off1)["t"] / sqrt(diag(Vpre)["t"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t 
+    
+    
+    
+    #common_all$CommonAsssumption_Pvalue[kl]<-koblo
+    common_all$CMNassumpZstongeV_Pvalue[kl]<-koblo
+    if (koblo<=0.05){
+      countPlessAlphaCITS_strongV=countPlessAlphaCITS_strongV+1 
+    }else{
+      countPlessAlphaCITS_strongV<-countPlessAlphaCITS_strongV+0
+    }
+    
+    
+    ##MILD
+    m_off1 <- glm(Y ~ t + offset(log(ZmildparaV+delta)),
+                  family =fam_nb, data = prenkt)
+    #coefficient
+    common_all$coef_tZMildV[kl]<-coef(m_off1)["t"]
+    
+    Vpre   <-nw_vcov(m_off1,Lpre)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off1)["t"] / sqrt(diag(Vpre)["t"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t 
+    
+    
+    
+    #common_all$CommonAsssumption_Pvalue[kl]<-koblo
+    common_all$CMNassumpZMildV_Pvalue[kl]<-koblo
+    if (koblo<=0.05){
+      countPlessAlphaCITS_mildV=countPlessAlphaCITS_mildV+1 
+    }else{
+      countPlessAlphaCITS_mildV<-countPlessAlphaCITS_mildV+0
+    } 
+    
+    
+    #print(nk)
+    ##fitting common trend model with control as offset
+    #if (!requireNamespace("MASS", quietly = TRUE)) install.packages("MASS")
+    #library(MASS)
+    #lagnewest
+    if(lagnewestPRE_postCombine>0){
+      L<-lagnewestPRE_postCombine
+    }else{
+      L<- floor(nrow(nkkdt)^(1/4)) 
+    }
+    #print(paste("Lag for whole period is",L,sep=""))
+    m_off<- glm(Y ~P+ offset(log(Z+delta)),
+                family =fam_nb, data =nkkdt)
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    
+    if (AutomaBandAR==1){
+      L<-nw_vcovpre(m_off,L,nkkdt$t)
+    }else{
+      L<-L
+    }
+    
+    print(paste("Lag for whole period is",L,sep=""))
+    #coefficient
+    
+    Vpre   <-nw_vcov(m_off,L)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off)["P"] / sqrt(diag(Vpre)["P"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t  
+    
+    
+    
+    
+    ##fill coefficeints
+    common_all$P_estimateCITS[kl]<-coef(m_off)["P"]
+    common_all$Pstd_estimateCITS[kl]<-sqrt(diag(Vpre)["P"])
+    common_all$P_pValueCITS[kl]<-koblo
+    
+    if (koblo<=0.05){
+      power_CITS<-power_CITS+1
+      #power_Trdfull
+      #power_TrdnoX1
+      #power_Trdno_t
+    }else{
+      power_CITS<-power_CITS+0
+    }
+    
+    
+    ##Spill over z
+    #ZsameDirSpil_1Pfivepct
+    m_off<- glm(Y ~P+ offset(log(ZsameDirSpil_1Pfivepct+delta)),
+                family =fam_nb, data =nkkdt)
+    
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    if (AutomaBandAR==1){
+      L<-nw_vcovpre(m_off,L,nkkdt$t)
+    }else{
+      L<-L
+    }
+    
+    print(paste("Lag for whole period is",L,sep=""))
+    #coefficient
+    
+    Vpre   <-nw_vcov(m_off,L)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off)["P"] / sqrt(diag(Vpre)["P"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t  
+    common_all$P_estimateCITS_Spil5pct[kl]<-coef(m_off)["P"]
+    common_all$Pstd_estimateCITS_Spil5pct[kl]<-sqrt(diag(Vpre)["P"])
+    common_all$P_pValueCITS_Spil5pct[kl]<-koblo
+    
+    if (koblo<=0.05){
+      power_CITS5pct<-power_CITS5pct+1
+      #power_Trdfull
+      #power_TrdnoX1
+      #power_Trdno_t
+    }else{
+      power_CITS5pct<-power_CITS5pct+0
+    }
+    
+    
+    
+    #ZsameDirSpil 10% spillover ZsameDirSpil_3pct
+    m_off<- glm(Y ~P+ offset(log(ZsameDirSpil_3pct+delta)),
+                family =fam_nb, data =nkkdt)
+    
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    if (AutomaBandAR==1){
+      L<-nw_vcovpre(m_off,L,nkkdt$t)
+    }else{
+      L<-L
+    }
+    
+    print(paste("Lag for whole period is",L,sep=""))
+    #coefficient
+    
+    Vpre   <-nw_vcov(m_off,L)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off)["P"] / sqrt(diag(Vpre)["P"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t  
+    
+
+    common_all$P_estimateCITS_Spil10pct[kl]<-coef(m_off)["P"]
+    common_all$Pstd_estimateCITS_Spil10pct[kl]<-sqrt(diag(Vpre)["P"])
+    common_all$P_pValueCITS_Spil10pct[kl]<-koblo 
+    
+    
+    if (koblo<=0.05){
+      power_CITS10pct<-power_CITS10pct+1
+      #power_Trdfull
+      #power_TrdnoX1
+      #power_Trdno_t
+    }else{
+      power_CITS10pct<-power_CITS10pct+0
+    }
+  
+      
+    
+ #15% Dec ZopposieDirSpil;common_all$P_estimateCITS_Spil15Decpct;ZsameDirSpil
+    m_off<- glm(Y ~P+ offset(log(ZsameDirSpil+delta)),
+                family =fam_nb, data =nkkdt)
+    
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    if (AutomaBandAR==1){
+      L<-nw_vcovpre(m_off,L,nkkdt$t)
+    }else{
+      L<-L
+    }
+    
+    print(paste("Lag for whole period is",L,sep=""))
+    #coefficient
+    
+    Vpre   <-nw_vcov(m_off,L)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off)["P"] / sqrt(diag(Vpre)["P"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t  
+    
+    #common_all$P_estimateCITS_Spil15Decpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Decpct<-NA
+    #common_all$P_pValueCITS_Spil15Decpct<-NA
+    
+    
+    common_all$P_estimateCITS_Spil15Decpct[kl]<-coef(m_off)["P"]
+    common_all$Pstd_estimateCITS_Spil15Decpct[kl]<-sqrt(diag(Vpre)["P"])
+    common_all$P_pValueCITS_Spil15Decpct[kl]<-koblo 
+    
+    
+    if (koblo<=0.05){
+      power_CITS15Decpct<-power_CITS15Decpct+1
+      #power_Trdfull
+      #power_TrdnoX1
+      #power_Trdno_t
+    }else{
+      power_CITS15Decpct<-power_CITS15Decpct+0
+    }
+    
+    
+    
+    #15% Inc ZopposieDirSpil;common_all$P_estimateCITS_Spil15Decpct;ZsameDirSpil
+    m_off<- glm(Y ~P+ offset(log(ZopposieDirSpil+delta)),
+                family =fam_nb, data =nkkdt)
+    
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    if (AutomaBandAR==1){
+      L<-nw_vcovpre(m_off,L,nkkdt$t)
+    }else{
+      L<-L
+    }
+    
+    print(paste("Lag for whole period is",L,sep=""))
+    #coefficient
+    
+    Vpre   <-nw_vcov(m_off,L)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off)["P"] / sqrt(diag(Vpre)["P"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t  
+    
+    #common_all$P_estimateCITS_Spil15Decpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Decpct<-NA
+    #common_all$P_pValueCITS_Spil15Decpct<-NA
+    #common_all$P_estimateCITS_Spil15Incpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Incpct<-NA
+    #common_all$P_pValueCITS_Spil15Incpct<-NA
+    
+    common_all$P_estimateCITS_Spil15Incpct[kl]<-coef(m_off)["P"]
+    common_all$Pstd_estimateCITS_Spil15Incpct[kl]<-sqrt(diag(Vpre)["P"])
+    common_all$P_pValueCITS_Spil15Incpct[kl]<-koblo 
+    
+    
+    if (koblo<=0.05){
+      power_CITS15Incpct<-power_CITS15Incpct+1
+      #power_Trdfull
+      #power_TrdnoX1
+      #power_Trdno_t
+    }else{
+      power_CITS15Incpct<-power_CITS15Incpct+0
+    }
+    
+    
+    
+    
+    
+    
+    
+    ##traditional regression 
+    ##with all confounders adjusted
+    m_adj <-glm(Y ~ t + P + X1, family =fam_nb, data =nkkdt)
+    
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"] 
+    if (TrdAR==1){
+      Vpre   <-nw_vcov(m_adj,L)
+      # pull p-value for t using HAC:
+      z_t    <- coef(m_adj)["P"] / sqrt(diag(Vpre)["P"])
+      p_t    <- 2 * pnorm(-abs(z_t))
+      #p_value
+      koblo<-p_t
+      
+      ##update coefficients
+      common_all$P_estimateTrd[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTrd[kl]<-sqrt(diag(Vpre)["P"])
+      
+      if (koblo<=0.05){
+        power_Trdfull<-power_Trdfull+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_Trdfull<-power_Trdfull+0
+      }
+      
+    } else{
+      ##No auto-corelation
+      #p_value
+      ## 1. Pearson residuals
+      r_pearson <- residuals(m_adj , type = "pearson")
+      Tlen <- length(r_pearson)
+      ar_fit <- ar(r_pearson, method = "yw", aic = TRUE)
+      common_all$TrdarOrderfull[kl]<-ar_fit$order
+      
+      est<- coef(m_adj)["P"]
+      se<- sqrt(diag(vcov(m_adj)))["P"]
+      z   <- est / se
+      p_wald <- 2 * pnorm(-abs(z))
+      p_wald
+      
+      
+      koblo<-p_wald
+      
+      ##update coefficients
+      common_all$P_estimateTrd[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTrd[kl]<-sqrt(diag(vcov(m_adj)))["P"]
+      
+      if (koblo<=0.05){
+        power_Trdfull<-power_Trdfull+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_Trdfull<-power_Trdfull+0
+      }
+      
+   
+    }
+    
+    ##No X1 adjustment
+    m_adj <-glm(Y ~ t + P, family =fam_nb, data =nkkdt)
+    #coefficient
+    if (TrdAR==1){
+      Vpre   <-nw_vcov(m_adj,L)
+      # pull p-value for t using HAC:
+      z_t    <- coef(m_adj)["P"] / sqrt(diag(Vpre)["P"])
+      p_t    <- 2 * pnorm(-abs(z_t))
+      #p_value
+      koblo<-p_t
+      
+      ##update coefficients
+      common_all$P_estimateTrdX1_no[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTrdX1_no[kl]<-sqrt(diag(Vpre)["P"])
+      
+      if (koblo<=0.05){
+        power_TrdnoX1<-power_TrdnoX1+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_TrdnoX1<-power_TrdnoX1+0
+      }
+      
+    } else{
+      ##No auto-corelation
+      #p_value
+      est<- coef(m_adj)["P"]
+      se<- sqrt(diag(vcov(m_adj)))["P"]
+      z   <- est / se
+      p_wald <- 2 * pnorm(-abs(z))
+      p_wald
+      
+      
+      koblo<-p_wald
+      
+      ##update coefficients
+      common_all$P_estimateTrdX1_no[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTrdX1_no[kl]<-sqrt(diag(vcov(m_adj)))["P"]
+      
+      if (koblo<=0.05){
+        power_TrdnoX1<-power_TrdnoX1+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_TrdnoX1<-power_TrdnoX1+0
+      }
+      
+      
+    }
+    
+    
+    
+    
+    
+    
+    #Traditional regression without time adjustment
+    m_adj <-glm(Y ~P+X1, family=fam_nb, data =nkkdt)
+    #coefficient
+    if (TrdAR==1){
+      Vpre   <-nw_vcov(m_adj,L)
+      # pull p-value for t using HAC:
+      z_t    <- coef(m_adj)["P"] / sqrt(diag(Vpre)["P"])
+      p_t    <- 2 * pnorm(-abs(z_t))
+      #p_value
+      koblo<-p_t
+      
+      ##update coefficients
+      common_all$P_estimateTrd_t_no[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTr_t_no[kl]<-sqrt(diag(Vpre)["P"])
+      
+      if (koblo<=0.05){
+        power_Trdno_t<-power_Trdno_t+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_Trdno_t<-power_Trdno_t+0
+      }
+      
+    } else{
+      ##No auto-corelation
+      #p_value
+      est<- coef(m_adj)["P"]
+      se<- sqrt(diag(vcov(m_adj)))["P"]
+      z   <- est / se
+      p_wald <- 2 * pnorm(-abs(z))
+      p_wald
+      
+      
+      koblo<-p_wald
+      
+      ##update coefficients
+      common_all$P_estimateTrd_t_no[kl]<-coef(m_adj)["P"]
+      common_all$Pstd_estimateTr_t_no[kl]<-sqrt(diag(vcov(m_adj)))["P"]
+      
+      if (koblo<=0.05){
+        power_Trdno_t<-power_Trdno_t+1
+        #power_TrdnoX1
+        #power_Trdno_t
+      }else{
+        power_Trdno_t<-power_Trdno_t+0
+      }
+      
+      
+    }
+    
+    
+    
+    
+    
+    
+    
+    kl<-kl+1
+  } 
+  # Return a list containing the data frame and additional variables
+  return(list(
+    common_all = common_all,
+    power_CITS5pct=power_CITS5pct,
+    power_CITS10pct=power_CITS10pct,
+    power_CITS15Decpct=power_CITS15Decpct,
+    power_CITS15Incpct=power_CITS15Incpct,
+    power_CITS = power_CITS,
+    power_Trdfull = power_Trdfull,
+    power_TrdnoX1 = power_TrdnoX1,
+    power_Trdno_t = power_Trdno_t,
+    countPlessAlphaCITS = countPlessAlphaCITS,
+    countPlessAlphaCITS_strongV=countPlessAlphaCITS_strongV,
+    countPlessAlphaCITS_mildV=countPlessAlphaCITS_mildV,
+    countPlesalphaZCITS_SngerV = countPlesalphaZCITS_SngerV,
+    sumzeroZ = sumzeroZ,
+    sumnonzeroZ = sumnonzeroZ
+  ))
+}
+#Run 2 for CBottomley your lag L,no whitening;or other your lag L with whitening
+common_all<-common_allx(common_all,1,2)
+#common_all<-common_allx(common_all)
+#lets try user lag 7
+#common_all<-common_allx(common_all,7)
+results<-common_all
+common_all<-results$common_all
+View(common_all)
+##extract others
+power_CITS<-results$power_CITS
+power_CITS5pct<-results$power_CITS5pct
+power_CITS10pct<-results$power_CITS10pct
+power_CITS15Decpct<-results$power_CITS15Decpct
+power_CITS15Incpct<-results$power_CITS15Incpct
+power_Trdfull<-results$power_Trdfull
+power_TrdnoX1<-results$power_TrdnoX1
+power_Trdno_t<-results$power_Trdno_t
+countPlessAlphaCITS<-results$countPlessAlphaCITS
+countPlesalphaZCITS_SngerV<-results$countPlesalphaZCITS_SngerV
+sumzeroZ<-results$sumzeroZ
+sumnonzeroZ<-results$sumnonzeroZ
+countPlessAlphaCITS_strongV<-results$countPlessAlphaCITS_strongV
+countPlessAlphaCITS_mildV<-results$countPlessAlphaCITS_mildV
+
+##rejection rate countPlessAlphaCITS
+##Clean Z
+gh<-7000
+v<-common_all$CommonAsssumption_Pvalue
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+power_CITS1<-(countPlessAlphaCITS/gh)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,gh)
+
+
+##Mid violation
+v<-common_all$CMNassumpZMildV_Pvalue
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+power_CITS1<-(countPlessAlphaCITS_mildV/gh)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,gh)
+
+##strong Violation
+v<-common_all$CMNassumpZstongeV_Pvalue
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+power_CITS1<-(countPlessAlphaCITS_strongV/gh)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,gh)
+
+#Stronger Violation
+v<-common_all$CMNassumpZstongerV_Pvalue
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+power_CITS1<-(countPlesalphaZCITS_SngerV/gh)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,gh)
+
+##additional calculations:
+propReje_ZV<-round(((countPlesalphaZCITS_SngerV/gh)*100),2)
+print(propReje_ZV)
+propReje_Zokay<-round(((countPlessAlphaCITS/gh)*100),2)
+print(propReje_Zokay)
+
+
+
+
+##Drawing graph for common trend from first dataset of expected:
+#visual_fred<-common_all$EstimandScenario[1]
+#common_all<-common_all[common_all$EstimandScenario=="minimum",]
+#common_all<-common_all[common_all$EstimandScenario=="Maximum",]
+#dfre<-common_alldup$EstimandScenario[common_alldup$EstimandScenario=="Expected"]
+vfe<-visual_fred
+if (vfe=="Expected"){
+  joka<-"Moderate"
+  scen<-paste(joka," ","log0.7",sep ="")
+} else if (vfe=="minimum"){
+  joka<-"Small"
+  scen<-paste(joka," ","log0.96",sep ="")
+}else{
+  joka<-"Large" 
+  scen<-paste(joka," ","log0.6",sep ="")
+}
+
+print(vfe)
+if (vfe==as.character(visual_fred)){
+  dat  <- subset(common_all, j == 1)
+  t0   <- dat$t[dat$P == 1][1]
+  datpre <- subset(dat, t < t0)   # safer than P==0
+  ## --- before the fits ---
+  use_log <- TRUE                 # switch: TRUE = log scale; FALSE = raw counts
+  eps     <-delta                  # small offset to avoid log(0); you can use your `delta`
+  tf  <- function(x) if (use_log) log(x + eps) else x
+  ylab_txt <- if (use_log) "log(Count)" else "Count"
+  
+  ## -------- fits (on the chosen scale) --------
+  fitY_A <- loess(tf(Y) ~ t, data = datpre, span=.6, degree=1, family="symmetric")
+  fitZ_A <- loess(tf(Z) ~ t, data = datpre, span=.6, degree=1, family="symmetric")
+  fitY_B <- loess(tf(Y) ~ t, data = datpre, span=.6, degree=1, family="symmetric")
+  fitZ_B <- loess(tf(ZmStrongerparaV) ~ t, data = datpre, span=.6, degree=1, family="symmetric")
+  
+  ## -------- PNG --------
+  png("graphs/prepolicy_loess_stacked.png", width = 7, height = 9, units = "in", res = 300)
+  par(mfcol = c(2,1), mar = c(4,4,1.5,1), oma = c(3,0.5,0.5,0.5), mgp = c(2,0.7,0))
+  #png("graphs/prepolicy_loess_stacked.png")
+  # Panel A
+  yA  <- tf(datpre$Y)
+  zA  <- tf(datpre$Z)
+  ylimA <- range(yA, zA, na.rm = TRUE)
+  
+  yB  <- tf(datpre$Y)
+  zB  <- tf(datpre$ZmStrongerparaV)
+  ylimB <- range(yB, zB, na.rm = TRUE)
+  
+  plot(datpre$t, tf(datpre$Y), pch=16, col="steelblue",
+       xlab="Time (pre-policy)", ylab=ylab_txt, main=paste("A","(",scen,")"),
+       xlim=c(min(datpre$t), t0),ylim=ylimA )
+  points(datpre$t, tf(datpre$Z), pch=16, col="tomato4")
+  lines(datpre$t, predict(fitY_A), lwd=3, col="steelblue4")
+  lines(datpre$t, predict(fitZ_A), lwd=3, col="tomato4")
+  #abline(v=t0, lty=8, col="black"); grid()
+  legend("topright", c("Y","Z"),
+         col=c("steelblue4","tomato4"), lty=1, lwd=3, bty="n", cex=.9)
+  legend("topleft",
+         legend=sprintf("Rejection rate= %.0f%%", ifelse(propReje_Zokay<=1, 100*propReje_Zokay, propReje_Zokay)),
+         bty="n", text.col="black", cex=1.0, text.font=2)
+  
+  # Panel B
+  plot(datpre$t, tf(datpre$Y), pch=16, col="steelblue",
+       xlab="Time (pre-policy)", ylab=ylab_txt, main=paste("B","(",scen,")"),
+       xlim=c(min(datpre$t), t0),ylim=ylimB)
+  points(datpre$t, tf(datpre$ZmStrongerparaV), pch=16, col="tomato4")
+  lines(datpre$t, predict(fitY_B), lwd=3, col="steelblue4")
+  lines(datpre$t, predict(fitZ_B), lwd=3, col="tomato4")
+  #abline(v=t0, lty=8, col="black"); grid()
+  legend("topright", c("Y","Z_vio"),
+         col=c("steelblue4","tomato4"), lty=1, lwd=3, bty="n", cex=.9)
+  legend("topleft",
+         legend=sprintf("Rejection rate= %.0f%%", ifelse(propReje_ZV<=1, 100*propReje_ZV, propReje_ZV)),
+         bty="n", text.col="black", cex=1.0, text.font=2)
+  
+  mtext("A: Common trend assumption met    |    B: Common trend assumption violated",
+        side=1, outer=TRUE, line=1.5, cex=.95)
+  dev.off()
+  
+  ## -------- PDF (repeat the same two panels) --------
+  #graphs/prepolicy_loess_stacked.png
+  pdf("graphs/prepolicy_loess_stacked.pdf", width = 7, height = 9)
+  par(mfcol = c(2,1), mar = c(4,4,1.5,1), oma = c(3,0.5,0.5,0.5), mgp = c(2,0.7,0))
+  ## (repeat the two panel blocks exactly as above)
+  # Panel A
+  plot(datpre$t, tf(datpre$Y), pch=16, col="steelblue",
+       xlab="Time (pre-policy)", ylab=ylab_txt, main=paste("A","(",scen,")"),
+       xlim=c(min(datpre$t), t0),ylim=ylimA)
+  points(datpre$t, tf(datpre$Z), pch=16, col="tomato4")
+  lines(datpre$t, predict(fitY_A), lwd=3, col="steelblue4")
+  lines(datpre$t, predict(fitZ_A), lwd=3, col="tomato4")
+  #abline(v=t0, lty=8, col="black"); grid()
+  legend("topright", c("Y","Z"),
+         col=c("steelblue4","tomato4"), lty=1, lwd=3, bty="n", cex=.9)
+  legend("topleft",
+         legend=sprintf("Rejection rate= %.0f%%", ifelse(propReje_Zokay<=1, 100*propReje_Zokay, propReje_Zokay)),
+         bty="n", text.col="black", cex=1.0, text.font=2)
+  
+  # Panel B
+  plot(datpre$t, tf(datpre$Y), pch=16, col="steelblue",
+       xlab="Time (pre-policy)", ylab=ylab_txt, main=paste("B","(",scen,")"),
+       xlim=c(min(datpre$t), t0),ylim=ylimB)
+  points(datpre$t, tf(datpre$ZmStrongerparaV), pch=16, col="tomato4")
+  lines(datpre$t, predict(fitY_B), lwd=3, col="steelblue4")
+  lines(datpre$t, predict(fitZ_B), lwd=3, col="tomato4")
+  #abline(v=t0, lty=8, col="black"); grid()
+  legend("topright", c("Y","Z_vio"),
+         col=c("steelblue4","tomato4"), lty=1, lwd=3, bty="n", cex=.9)
+  legend("topleft",
+         legend=sprintf("Rejection rate= %.0f%%", ifelse(propReje_ZV<=1, 100*propReje_ZV, propReje_ZV)),
+         bty="n", text.col="black", cex=1.0, text.font=2)
+  
+  mtext("A: Common trend assumption met    |    B: Common trend assumption violated",
+        side=1, outer=TRUE, line=1.5, cex=.95)
+  dev.off()
+  
+  
+}else{
+  print("NOt interested")
+}
+
+
+
+##print number of zeroes in Z if any
+print(sumzeroZ)
+print(sumnonzeroZ)
+print(countPlessAlphaCITS)
+##pvalue CIS_Z overal pretend(Common trend Assumption met)
+print(mean(common_all$CommonAsssumption_Pvalue,na.rm =TRUE))
+print(sd(common_all$CommonAsssumption_Pvalue,na.rm =TRUE))
+
+#coef
+print(mean(common_all$coef_tZcommon,na.rm=TRUE))
+#Serious Violation(Z stronger Violation) CMNassumpZstongerV_Pvalue
+print(mean(common_all$CMNassumpZstongerV_Pvalue,na.rm =TRUE))
+print(sd(common_all$CMNassumpZstongerV_Pvalue,na.rm =TRUE))
+#coef
+print(mean(common_all$coef_tZstngerV,na.rm=TRUE))
+##Subset dataset where common assumption P_value is violated(the 7%)
+commonV<-common_all[common_all$CommonAsssumption_Pvalue<=0.05 & !is.na(common_all$CommonAsssumption_Pvalue),]
+
+
+
+##mean of CITS P and standard error
+##mean coef
+CITS_Pmean<-mean(common_all$P_estimateCITS,na.rm =TRUE)
+print(CITS_Pmean)
+
+
+#7% p_value<0.05
+CITS_Pmean<-mean(commonV$P_estimateCITS,na.rm =TRUE)
+print(CITS_Pmean)
+
+
+##standard error of Estimate(overal)
+fredMC(common_all,P_estimateCITS,Pstd_estimateCITS)
+#7% p_value<0.05
+fredMC(commonV,P_estimateCITS,Pstd_estimateCITS)
+
+
+#MCSE of bias
+MCSE_bias(common_all,P_estimateCITS)
+MCSE_bias(commonV,P_estimateCITS)
+##Bias estimate
+bias(common_all,P_estimateCITS,log(0.6))
+#bias
+bias(commonV,P_estimateCITS,log(0.7))
+
+
+
+
+
+##MSE
+MSE(common_all,"P_estimateCITS",log(0.7))
+MSE(commonV,"P_estimateCITS",log(0.7))
+
+
+##MCSE_MSE
+MCSE_MSE(common_all,P_estimateCITS,log(0.7))
+MCSE_MSE(commonV,P_estimateCITS,log(0.7))
+
+
+##Coverage
+FredCoverage(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7))
+##Coverage
+FredCoverage(commonV,P_estimateCITS,Pstd_estimateCITS,log(0.7))
+
+#FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
+##Power CITS
+v<-common_all$P_pValueCITS
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<=0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+
+
+power_CITS1<-(power_CITS/gh)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,gh)
+#7%vilation
+v<-commonV$P_pValueCITS
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+
+
+##SPILLOVERCITS
+##mean coef 5% 
+#common_all$P_estimateCITS_Spil5pct<-NA
+#common_all$Pstd_estimateCITS_Spil5pct<-NA
+#common_all$P_pValueCITS_Spil5pct<-NA
+CITS_Pmean<-mean(common_all$P_estimateCITS_Spil5pct,na.rm =TRUE)
+print(CITS_Pmean)
+
+##Bias estimate
+bias(common_all,P_estimateCITS_Spil5pct,log(0.6))
+
+
+##standard error of Estimate(overal)
+fredMC(common_all,P_estimateCITS_Spil5pct,Pstd_estimateCITS_Spil5pct)
+
+#MCSE of bias
+MCSE_bias(common_all,P_estimateCITS_Spil5pct)
+
+
+
+##MSE
+MSE(common_all,"P_estimateCITS_Spil5pct",log(0.6))
+
+
+
+##MCSE_MSE
+MCSE_MSE(common_all,P_estimateCITS_Spil5pct,log(0.6))
+
+
+
+##Coverage
+FredCoverage(common_all,P_estimateCITS_Spil5pct,Pstd_estimateCITS_Spil5pct,log(0.6))
+
+
+#FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
+##Power CITS
+v<-common_all$P_pValueCITS_Spil5pct
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<=0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+
+
+power_CITS1<-(power_CITS5pct/gh)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,gh)
+
+
+
+
+#10% Spill(contamination)
+#common_all$P_pValueCITS_Spil5pct<-NA
+CITS_Pmean<-mean(common_all$P_estimateCITS_Spil10pct,na.rm =TRUE)
+print(CITS_Pmean)
+
+
+##standard error of Estimate(overal)
+fredMC(common_all,P_estimateCITS_Spil10pct,Pstd_estimateCITS_Spil10pct)
+
+##Bias estimate
+bias(common_all,P_estimateCITS_Spil10pct,log(0.6))
+
+#MCSE of bias
+MCSE_bias(common_all,P_estimateCITS_Spil10pct)
+
+
+
+##MSE
+MSE(common_all,"P_estimateCITS_Spil10pct",log(0.6))
+
+
+
+##MCSE_MSE
+MCSE_MSE(common_all,P_estimateCITS_Spil10pct,log(0.6))
+
+
+
+##Coverage
+FredCoverage(common_all,P_estimateCITS_Spil10pct,Pstd_estimateCITS_Spil10pct,log(0.6))
+
+
+#FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
+##Power CITS
+v<-common_all$P_pValueCITS_Spil10pct
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<=0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+
+
+power_CITS1<-(power_CITS10pct/gh)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,gh)
+
+
+
+
+#15% same direction Spill_over
+#common_all$P_estimateCITS_Spil15Decpct<-NA
+#common_all$Pstd_estimateCITS_Spil15Decpct<-NA
+#common_all$P_pValueCITS_Spil15Decpct<-NA
+CITS_Pmean<-mean(common_all$P_estimateCITS_Spil15Decpct,na.rm =TRUE)
+print(CITS_Pmean)
+
+
+##standard error of Estimate(overal)
+fredMC(common_all,P_estimateCITS_Spil15Decpct,Pstd_estimateCITS_Spil15Decpct)
+#Bias
+bias(common_all,P_estimateCITS_Spil15Decpct,log(0.6))
+
+#MCSE of bias
+MCSE_bias(common_all,P_estimateCITS_Spil15Decpct)
+
+
+
+##MSE
+MSE(common_all,"P_estimateCITS_Spil15Decpct",log(0.6))
+
+
+
+##MCSE_MSE
+MCSE_MSE(common_all,P_estimateCITS_Spil15Decpct,log(0.7))
+
+
+
+##Coverage
+FredCoverage(common_all,P_estimateCITS_Spil15Decpct,Pstd_estimateCITS_Spil15Decpct,log(0.6))
+
+
+#FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
+##Power CITS
+#common_all$P_pValueCITS_Spil5pct
+v<-common_all$P_pValueCITS_Spil15Decpct
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<=0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+
+
+power_CITS1<-(power_CITS15Decpct/gh)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,gh)
+
+
+
+
+##15% Opposite direction
+CITS_Pmean<-mean(common_all$P_estimateCITS_Spil15Incpct,na.rm =TRUE)
+print(CITS_Pmean)
+
+
+##standard error of Estimate(overal)
+fredMC(common_all,P_estimateCITS_Spil15Incpct,Pstd_estimateCITS_Spil15Incpct)
+
+#Bias
+bias(common_all,P_estimateCITS_Spil15Incpct,log(0.6))
+
+#MCSE of bias
+MCSE_bias(common_all,P_estimateCITS_Spil15Incpct)
+
+
+
+##MSE
+MSE(common_all,"P_estimateCITS_Spil15Incpct",log(0.6))
+
+
+
+##MCSE_MSE
+MCSE_MSE(common_all,P_estimateCITS_Spil15Incpct,log(0.6))
+
+
+
+##Coverage
+FredCoverage(common_all,P_estimateCITS_Spil15Incpct,Pstd_estimateCITS_Spil15Incpct,log(0.6))
+
+
+#FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
+##Power CITS
+#common_all$P_pValueCITS_Spil5pct
+v<-common_all$P_pValueCITS_Spil15Incpct
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<=0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+
+
+power_CITS1<-(power_CITS15Incpct/gh)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,gh)
+
+
+
+
+
+
+
+
+
+
+
+
+
+##mean traditional
+#mean coef
+Trd_Pmean<-mean(common_all$P_estimateTrd,na.rm=TRUE)
+print(Trd_Pmean)
+#MC standard error
+fredMC(common_all,P_estimateTrd,Pstd_estimateTrd)
+
+#bias
+bias(common_all,P_estimateTrd,log(0.6))
+#MCSE of bias
+MCSE_bias(common_all,P_estimateTrd)
+##MSE
+MSE(common_all,"P_estimateTrd",log(0.7))
+#MCSE_MSE
+MCSE_MSE(common_all,P_estimateTrd,log(0.7))
+##Coverage
+FredCoverage(common_all,P_estimateTrd,Pstd_estimateTrd,log(0.7))
+#FredCoverageT(common_all,P_estimateTrd,Pstd_estimateTrd,log(0.7),j,alpha=0.05);confirmed also working
+
+#power
+print(power_Trdfull)
+powertrt1<-(power_Trdfull/gh)*100
+print(powertrt1)
+pwaMCSE(powertrt1,gh)
+
+
+
+#Traditional regression no adjustment for X1
+print(mean(common_all$P_estimateTrdX1_no,na.rm = TRUE))
+#MC standard error
+fredMC(common_all,P_estimateTrdX1_no)
+#bias
+bias(common_all,P_estimateTrdX1_no,log(0.6))
+
+#MCSE of bias
+MCSE_bias(common_all,P_estimateTrdX1_no)
+
+##MSE
+MSE(common_all,"P_estimateTrdX1_no",log(0.7))
+#MCSE_MSE
+MCSE_MSE(common_all,P_estimateTrdX1_no,log(0.7))
+##Coverage
+FredCoverage(common_all,P_estimateTrdX1_no,Pstd_estimateTrdX1_no,log(0.7))
+#power
+print(power_TrdnoX1)
+powertrt1<-(power_TrdnoX1/gh)*100
+print(powertrt1)
+pwaMCSE(powertrt1,gh)
+
+
+
+##Traditional regression unadjusted for time
+#Traditional regression without time adjustment
+print(mean(common_all$P_estimateTrd_t_no,na.rm = TRUE))
+#MC standard error
+fredMC(common_all,P_estimateTrd_t_no)
+#bias
+bias(common_all,P_estimateTrd_t_no,log(0.6))
+
+#MCSE of bias
+MCSE_bias(common_all,P_estimateTrd_t_no)
+
+##MSE
+MSE(common_all,"P_estimateTrd_t_no",log(0.7))
+
+#MCSE_MSE
+MCSE_MSE(common_all,P_estimateTrd_t_no,log(0.7))
+
+##Coverage
+FredCoverage(common_all,P_estimateTrd_t_no,Pstd_estimateTr_t_no,log(0.7))
+FredCoverageT(common_all,P_estimateTrd_t_no,Pstd_estimateTr_t_no,log(0.7),j,alpha=0.05)
+#power
+print(power_Trdno_t)
+powertrt1<-(power_Trdno_t/gh)*100
+print(powertrt1)
+pwaMCSE(powertrt1,gh)
+
+
+
+
+
+
+
+
+
+
+
