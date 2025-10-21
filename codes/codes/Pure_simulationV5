@@ -1,0 +1,726 @@
+
+##Package area.Load packages
+rm(list = ls(all.names = TRUE), envir = .GlobalEnv)
+
+if (!requireNamespace("MASS", quietly = TRUE)) install.packages("MASS")
+library(MASS)
+
+if (!requireNamespace("withr", quietly = TRUE)) install.packages("withr")
+library(withr)
+
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
+library(dplyr)
+library(tscount)
+#parameters
+x1drop_schock<--0.9 
+driftX1<-0.000 #0.015
+seasonalX<-c(log(1.04),log(0.98),log(1.04),log(1.01))
+#Season<-
+#harmonic(month, 2, 12)1  0.0370967  0.0100241    3.701 0.000520 ***
+  #harmonic(month, 2, 12)2 -0.0182122  0.0096435   -1.889 0.064537 .  
+#harmonic(month, 2, 12)3  0.0381608  0.0096848    3.940 0.000244 ***
+  #harmonic(month, 2, 12)4  0.0147634  0.0097221    1.519 0.134935 
+
+#sim_listUncommon<-list() choose bernal paper on Its to inform Bo,for Y 600,for z 700 #(log(1.75)/(-0.9))
+vcoeffsY<-c(log(700),log(0.995),log(0.96),log(0.70),log(0.60),(log(0.84)/(x1drop_schock)),log(1),350)#vary B2 (-0.04,-0.36,-0.51) #B0,B1(time),B2(policy),B3(confounder),thetaY repectilvely
+vcoeffsZ<-c(log(900),log(0.995),(log(0.84)/(-0.9)),log(1.05),log(1),350) # bo,b1(time),b2(confounder),thetaZ.Lets tKE 90% trend,coef
+#PolicyEffectOnZ<-c(log(0.985),log(0.97),log(0.95)) previous but let me make it 5% 10% 15%(also oposite for 15%)  too as below
+PolicyEffectOnZ<-c(log(0.95),log(0.90),log(0.85),log(1.15))
+#policy on X
+#PolicyEffectOnX<-c(0.015,0.03,0.05)
+PolicyEffectOnX<-c(log(1.05),log(1.10),log(1.15)) #let me try 5% 10% 15% increase on X
+##X parameters
+paraneterX<-c(log(2000),log(1.001),log(0.98))
+lagX2<-4
+lagtq<-2
+lagpstT0X1<-15
+##differenZslope
+DifferentZSlope<-c(-0.0035,-0.0020,-0.0005)
+## -0.0001 tune qudratic term its a problem
+EstimandMain<- -0.36
+#set seed
+#RNGkind(kind = "Mersenne-Twister", normal.kind = "Inversion", sample.kind = "Rejection")
+#set.seed(123)
+fredSiProject<-function(nsim,seasonalX,vcoeffsY,vcoeffsZ,rhofd, sigma2fd,n,u_s=0,genX2=TRUE,zslopPercent=10,PincZsl=10,prop_MedX2=0.2,tensX2=1000,meanpreX2=2000,seed=123){ ##Let var be 3 times the mean. mean to variance ration for choosing overdispersion.Chose mean to var ratio of 2;mean=B0
+  #setting seed
+  RNGkind(kind = "Mersenne-Twister", normal.kind = "Inversion", sample.kind = "Rejection")
+  set.seed(seed)
+#sim_listcommonBO_Expected<-list()
+#sim_listcommonBO_MinEf<-list()
+#sim_listcommonBO_MaxEf<-list()
+sim_listcommonBO_MinEf <- list()
+sim_listcommonBO_Expected <- list()
+sim_listcommonBO_MaxEf <- list()
+#sim_listcommon<-list()
+oyaoya<-1
+  for (jek in 3:5) {
+    sim_listcommon<-list()
+    ##read coefficients
+    ##Y
+    B0<-vcoeffsY[1]
+    B1<-vcoeffsY[2]
+    B2<-vcoeffsY[jek]
+    B3<-vcoeffsY[6]
+    B4<-vcoeffsY[7] #curve
+    thetaY<-vcoeffsY[8]
+    
+    
+    for (i in 1:nsim){
+      print(paste("simulating dataset",i,"Level change",B2,sep=""))
+      
+      ##Cofficient Z
+      b0<-vcoeffsZ[1]
+      b1<-vcoeffsZ[2]
+      b2<-vcoeffsZ[3]
+      b3<-vcoeffsZ[4]
+      b4<-vcoeffsZ[5] #carvature
+      thetaZ<-vcoeffsZ[6]
+      #Spillover:
+      #PolicyEffectOnZ<-c(-0.015,-0.03,-0.05)
+      #PolicyEffectOnZ<-c(log(0.95),log(0.90),log(0.85))
+      #PolicyEffectOnZ<-c(log(0.95),log(0.90),log(0.85),log(1.15))
+      b3_1Pfivepct<-PolicyEffectOnZ[1]
+      b3_3pct<-PolicyEffectOnZ[2]
+      b4zz_1s<-PolicyEffectOnZ[3]
+      b4zz_1o<-PolicyEffectOnZ[4]
+      #b4x_5pct<-PolicyEffectOnZ[3]
+      #policy on X
+      #PolicyEffectOnX<-c(0.015,0.03,0.05)
+      #PolicyEffectOnX<-c(log(1.05),log(1.10),log(1.15)) 
+      b1_1Pfivepct<-PolicyEffectOnX[1]
+      b2_1P3pct<-PolicyEffectOnX[2]
+      b3_1P5pct<-PolicyEffectOnX[3]
+      #X_parameter
+      #paraneterX<-c(log(2000),log(1),log(0.98)) #Bo, trendB1,B effect on X
+      BO_x2<-paraneterX[1]
+      B1_x2<-paraneterX[2]
+      B_x2<-paraneterX[3]
+      
+      
+      
+      ##varyingZpretrend
+      #DifferentZSlope<-c(-0.0035,-0.0020,-0.0005)
+      #if (zslopPercent<=0){
+        mildparalleZ_Vf<-DifferentZSlope[1]
+        StrongparalleZ_Vf<-DifferentZSlope[2]
+        StrongerparalleZ_Vf<-DifferentZSlope[3]
+      #}else {
+        mildparalleZ_Vp<-((100-zslopPercent)/100)*B1
+        StrongparalleZ_Vp<-((100-(zslopPercent+PincZsl))/100)*B1
+        StrongerparalleZ_Vp<-((100-(zslopPercent+(2*PincZsl)))/100)*B1
+      #}#Print the slope being used
+        
+        if (zslopPercent<=0){
+          print(mildparalleZ_Vf)
+          print(StrongparalleZ_Vf)
+          print(StrongerparalleZ_Vf) 
+        }else{
+          print(mildparalleZ_Vp)
+          print(StrongparalleZ_Vp)
+          print(StrongerparalleZ_Vp)  
+        }
+      
+
+      
+      T<-n #100 for now
+      t  <- 1:T
+      tquad<-t^2
+      #t0 <- 25
+      if (T%%2==0){
+        t0<-((T/2)+1)
+        
+      }else{
+        t0<- floor((T/2)+0.5) 
+      }
+      
+      print(t0)
+      
+      P  <- as.integer(t >= t0)     # policy step at t=25
+      #N  <- rep(1000, T)            # exposure (can vary if you want)
+      
+      ##letting confounder have level drop 3 step early around policy
+      tq<-t0-lagtq
+      print(tq)
+      
+      #seasonalX<-c(log(1.04),log(0.98),log(1.04),log(1.01)) #Just picked berneal et al to inform this seasonality component
+      Season<-seasonalX[1]*sin((2*pi*t*1)/12)+seasonalX[2]*cos((2*pi*t*1)/12)+seasonalX[3]*sin((2*pi*t*2)/12)+seasonalX[4]*cos((2*pi*t*2)/12)
+      
+      
+      
+      ## ----- CONFOUNDERS (plausible, not collinear with policy) -----
+      # X1: near-coincident shock at t>=22 + small drift + noise lagpstToX1
+      #X1 <- x1drop_schock* as.integer(t >=tq & (t<=(t0+lagtq))) + driftX1* (t)+Season + rnorm(T, 0, 0.20)
+      X1 <- x1drop_schock* as.integer(t >=tq & (t<=(t0+lagpstT0X1))) + driftX1* (t)+Season + rnorm(T, 0, 0.20)
+      X1 <- X1 - mean(X1[t < t0])
+      #X1<- as.integer(t >= (t0 - 3))
+      # Seasonality (optional but realistic)
+      #S1 <- sin(2*pi*t/12)
+      #C1 <- cos(2*pi*t/12)
+      ## --- log-mean (eta) and mean (mu) ---
+      #X2 count
+      #policy on X
+      
+      #PolicyEffectOnX<-c(log(1.05),log(1.10),log(1.15)) #let me try 5% 10% 15% increase on X
+      ##X parameters
+      #paraneterX<-c(log(2000),log(1.001),log(0.98))
+      #PolicyEffectOnX<-c(0.015,0.03,0.05)
+      #b1_1Pfivepct<-PolicyEffectOnX[1]
+      #b2_1P3pct<-PolicyEffectOnX[2]
+      #b3_1P5pct<-PolicyEffectOnX[3]
+      #etaX2_1pointFivepct<-BO_x2+ B1_x2*t +b1_1Pfivepct*P #remove time
+      #paraneterX<-c(log(2000),log(1),log(0.98)) #Bo, trendB1,B effect on X
+      #BO_x2<-paraneterX[1]
+      #B1_x2<-paraneterX[2]
+      #B_x2<-paraneterX[3]
+      #X2 soem of effect is throught indirect effect
+      #.__rng_before <- .Random.seed
+      #seed_before <- .Random.seed
+      if (genX2==TRUE) with_preserve_seed({
+        #seed_before <- .Random.seed
+        #set.seed(seed + i)
+        T_total   <- B2                      # Interpret vcoeffsY[jek] as TOTAL
+        p_share   <- prop_MedX2
+        #beta_X2   <- log(0.98)               # −2% per +1 scaled unit (per +1000 visits)
+        IE        <- p_share * T_total       # target indirect on log scale
+        s         <- (IE /B_x2) * (tensX2 / meanpreX2)   # raw % step on X2 due to policy
+        DE        <- T_total - IE            # direct policy effect on Y
+        
+        # --- Generate raw X2 with a post-policy step of size 's' ---
+        etaX2 <- BO_x2 + B1_x2 * t + log(1 + s) * as.integer(t >= (t0 + lagX2)) + rnorm(T, 0, 0.20)
+        muX2  <- exp(etaX2)
+        X2_raw <- rpois(T, lambda = muX2)
+        
+        # Pre-policy mean (you can keep using meanpreX2 if you prefer it fixed)
+        mu_pre_obs <- mean(X2_raw[t < t0])
+        
+        # Scaled mediator used in Y model (center + divide by tensX2)
+        X2_scaled <- (X2_raw - mu_pre_obs) / tensX2
+        #.Random.seed <- seed_before
+      })else{
+        print(" ")
+      }
+      #.Random.seed <- seed_before
+      
+      etaX2_1pointFivepct<-BO_x2+B1_x2*t+b1_1Pfivepct*(as.integer(t>=(t0+lagX2)))+rnorm(T, 0, 0.20)
+      mu  <- exp(etaX2_1pointFivepct)
+      X2_1PointFivepct<- rpois(T, mu)
+      x2RawX2_1PointFivepct<-X2_1PointFivepct
+      X2_1PointFivepct<- (X2_1PointFivepct- mean(X2_1PointFivepct[t < t0])) / sd(X2_1PointFivepct[t < t0])
+      
+      
+      #etaX2_3pct<-BO_x2+ B1_x2*t +b2_1P3pct*P
+      etaX2_3pct<-BO_x2+B1_x2*t+b2_1P3pct *(as.integer(t>=(t0+lagX2)))+rnorm(T, 0, 0.20)
+      mu  <- exp(etaX2_3pct)
+      ## --- simulate counts ---
+      X2_3pct<- rpois(T, mu)                 # Poisson
+      x2RawX2_3pct<-X2_3pct
+      X2_3pct<- (X2_3pct- mean(X2_3pct[t < t0])) / sd(X2_3pct[t < t0])
+      
+      ##etaX2_5pct<-BO_x2+ B1_x2*t +b3_1P5pct*P  
+      etaX2_5pct<-BO_x2+B1_x2*t+b3_1P5pct*(as.integer(t>=(t0+lagX2)))+rnorm(T, 0, 0.20)
+      mu  <- exp(etaX2_5pct)
+      ## --- simulate counts ---
+      X2_5pct<- rpois(T, mu)                 # Poisson
+      x2rawX2_5pct<-X2_5pct
+      X2_5pct<- (X2_5pct- mean(X2_5pct[t < t0])) / sd(X2_5pct[t < t0])
+      
+      
+     
+      
+      ## Quick checks for (non-)collinearity with policy
+      cor_P_X1 <- cor(P, X1)   # should be far from 1
+      print(round(cor_P_X1, 3))
+      
+      ## ----- TRUE COEFFICIENTS -----internd to vary B2(-0.36 expected,-0.51 maximum,-0.04 minimal)
+      # Outcome Y (your estimand is B2)
+      #B0 <-3.99  #Bo infomred by mean pneumonia counts 2002
+      #B1 <- -0.005
+      #B2 <- -0.36     # true policy effect on log-mean for Y (we want to recover this)
+      #g1 <- ln(1.75)/(-0.9)
+      #B3<--0.623    # effect of confounder X1 on Y(Informed by strike effect Ongayo)
+      #g2a <- 0.25     # seasonality on Y
+      #g2b <- -0.15
+      #thetaY <- 20    # NB2 dispersion (larger -> less overdispersion)
+      
+      # Control Z: similar trend and confounders, but NO policy effect(I want to above the outcome slightly)
+      #b0 <-4.15  #Bo infomred by mean pneumonia counts 2002
+      #b1 <- -0.005  #-0.004
+      #b2<--0.623  # -0.073
+      #g2az <- 0.20
+      #g2bz <- -0.10
+      #thetaZ <- 25
+      
+      
+      ##Simulate auto-corellated errors
+      ## --- AR(1) error for the log-mean ---
+      rho    <-rhofd        #0.4 # choose from {0, 0.2, 0.4, 0.6, 0.8}/I took the mean Turner
+      sigma2 <-sigma2fd         #0.1 # variance of white-noise w_t (per Turner et al.)
+      
+      u <- numeric(T)
+      sd_stat <- sqrt(sigma2 / (1 - rho^2))  # stationary SD of AR(1) error
+      u[1] <- rnorm(1, 0, sd_stat)
+      for (tt in 2:T) u[tt] <- rho * u[tt-1] + rnorm(1, 0, sqrt(sigma2))
+      
+      ## Optional (recommended for counts): mean-preserve on log scale so E[exp(u)] ~ 1
+      u <- u - 0.5 * (sigma2 / (1 - rho^2)) #ensure
+      
+      if (u_s==1){
+        ## ----- GENERATE COUNTS (NB2) -----
+        # Linear predictors (log-means)
+        ##common trend data
+        ##Y affected by Z
+        
+        
+        etaY <- B0 + B1 * t + B2 * P + B3 * X1+B4*(t^2)+u
+        muY  <- exp(etaY)
+        Y    <- rnbinom(T, size = thetaY, mu = muY)
+        
+        etaZ <- b0 + b1 * t+ b2* X1+b4*(t^2)+u
+        muZ  <- exp(etaZ)
+        Z    <- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        ##Y with X2 that is affected by policy
+        # after simulating X2
+        #xbar_pre <- mean(X2[t < t0])
+        #X2c      <- X2 - xbar_pre          # raw units, just shifted
+        #beta_X2  <-B_x2/ 100        # 2% drop per +100 visits
+        beta_X2  <-B_x2 #X2_centred
+  
+        etaY <- B0 + B1*t + B2*P + B3*X1 + B4*(t^2) + beta_X2*X2_1PointFivepct + u  #Policy increases X by 2%
+        muY  <- exp(etaY)
+        YPolicyon_X1pFivepct<- rnbinom(T, size = thetaY, mu = muY)
+        
+        
+        
+        etaY <- B0 + B1*t + B2*P + B3*X1 + B4*(t^2) + beta_X2*X2_3pct+ u  #Policy increases X by 2%
+        muY  <- exp(etaY)
+        YPolicyon_X3pct<- rnbinom(T, size = thetaY, mu = muY)
+        
+        
+        etaY <- B0 + B1*t + B2*P + B3*X1 + B4*(t^2) + beta_X2*X2_5pct+ u  #Policy increases X by 2%
+        muY  <- exp(etaY)
+        YPolicyon_X5pct<- rnbinom(T, size = thetaY, mu = muY) 
+        
+
+        
+        
+        #SPILL OVER
+        ##Spillover effect(opposite direction)
+        etaZ <- b0 + b1 * t+b2* X1+((b4zz_1o)*P)+b4*(t^2)+u
+        muZ  <- exp(etaZ)
+        ZopposieDirSpil<- rnbinom(T, size = thetaZ, mu = muZ)
+        #same direction
+        etaZ <- b0 + b1 * t+b2* X1+((b4zz_1s)*P)+b4*(t^2)+u   
+        muZ  <- exp(etaZ)
+        ZsameDirSpil<- rnbinom(T, size = thetaZ, mu = muZ)
+        #b3_1Pfivepct<-PolicyEffectOnZ[1]
+        #b3_3pct<-PolicyEffectOnZ[2] b3_3pct
+        
+        
+        etaZ <- b0 + b1 * t+b2* X1+(b3_1Pfivepct*(P))+b4*(t^2)+u   
+        muZ  <- exp(etaZ)
+        ZsameDirSpil_1Pfivepct<- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        etaZ <- b0 + b1 * t+b2* X1+(b3_3pct*(P))+b4*(t^2)+u   
+        muZ  <- exp(etaZ)
+        ZsameDirSpil_3pct<- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        ##TREND VIOLATION PLAYING WITH TIME(Z declining slower)
+        if (zslopPercent<=0){
+        etaZ <- b0 + mildparalleZ_Vf * t+ b2* X1+b4*(t^2)+u
+        muZ  <- exp(etaZ)
+        ZmildparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        etaZ <- b0 + StrongparalleZ_Vf * t+ b2* X1+b4*(t^2)+u
+        muZ  <- exp(etaZ)
+        ZmStrongparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        etaZ <- b0 + StrongerparalleZ_Vf* t+ b2* X1+b4*(t^2)+u
+        muZ  <- exp(etaZ)
+        ZmStrongerparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+        }
+        else{
+          with_preserve_seed({
+            etaZ <- b0 + mildparalleZ_Vp * t+ b2* X1+b4*(t^2)+u
+            muZ  <- exp(etaZ)
+            ZmildparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+            
+            etaZ <- b0 + StrongparalleZ_Vp * t+ b2* X1+b4*(t^2)+u
+            muZ  <- exp(etaZ)
+            ZmStrongparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+            
+            etaZ <- b0 + StrongerparalleZ_Vp* t+ b2* X1+b4*(t^2)+u
+            muZ  <- exp(etaZ)
+            ZmStrongerparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+          })
+          etaZ <- b0 + mildparalleZ_Vf * t+ b2* X1+b4*(t^2)+u
+          muZ  <- exp(etaZ)
+          rnbinom(T, size = thetaZ, mu = muZ)
+          
+          etaZ <- b0 + StrongparalleZ_Vf * t+ b2* X1+b4*(t^2)+u
+          muZ  <- exp(etaZ)
+          rnbinom(T, size = thetaZ, mu = muZ)
+          
+          etaZ <- b0 + StrongerparalleZ_Vf* t+ b2* X1+b4*(t^2)+u
+          muZ  <- exp(etaZ)
+          rnbinom(T, size = thetaZ, mu = muZ)
+          
+          
+        }
+
+        ##unshared Z confounder
+        #etaZ <- b0 + b1 * t+b4*(t^2)+u
+        #muZ  <- exp(etaZ)
+        #Z_unXrm<- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        #etaZ <- b0 + b1 * t+b2* X1+u
+        #muZ  <- exp(etaZ)
+        #Z_unCurve<- rnbinom(T, size = thetaZ, mu = muZ)
+        ##Y mediated
+        if (genX2==TRUE) with_preserve_seed({
+          #seed_before <- .Random.seed
+          #set.seed(seed + i)
+          etaYM<-B0 + B1*t + DE*P + B3*X1 + B4*(t^2) + beta_X2 * X2_scaled+u #Policy increases X by 2%
+          muY<- exp(etaYM)
+          Y_aff<- rnbinom(T, size = thetaY, mu = muY)
+          dat<- data.frame(t,Y_aff,X2_scaled,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
+          #.Random.seed <- seed_before
+        })else{
+          dat<- data.frame(t,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
+        }
+
+        
+        
+        dat$j<-i
+        sim_listcommon[[i]]<-dat
+        ##unshared trend data
+        #etaY <- B0 + B1 * t + B2 * P + g1 * X1+u
+        #muY  <- exp(etaY)
+        #Y    <- rnbinom(T, size = thetaY, mu = muY)
+        
+        
+        
+      }else{
+        ## ----- GENERATE COUNTS (NB2) -----
+        # Linear predictors (log-means)
+        ##common trend data
+        #etaY <- B0 + B1 * t + B2 * P + B3 * X1+B4*(t^2)+u
+        etaY <- B0 + B1 * t + B2 * P + B3 * X1+B4*(t^2)
+        muY  <- exp(etaY)
+        Y    <- rnbinom(T, size = thetaY, mu = muY)
+        
+        #etaZ <- b0 + b1 * t+ b2* X1+b4*(t^2)+u
+        etaZ <- b0 + b1 * t+ b2* X1+b4*(t^2)
+        muZ  <- exp(etaZ)
+        Z    <- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        
+        
+        ##Y with X2 that is affected by policy
+        # after simulating X2
+        #xbar_pre <- mean(X2[t < t0])
+        #X2c      <- X2 - xbar_pre          # raw units, just shifted
+        beta_X2  <-B_x2       # 2% drop per +100 visits
+
+        etaY <- B0 + B1*t + B2*P + B3*X1 + B4*(t^2) + beta_X2*X2_1PointFivepct  #Policy increases X by 2%
+        muY  <- exp(etaY)
+        YPolicyon_X1pFivepct<- rnbinom(T, size = thetaY, mu = muY)
+        
+        
+        
+        etaY <- B0 + B1*t + B2*P + B3*X1 + B4*(t^2) + beta_X2*X2_3pct #Policy increases X by 2%
+        muY  <- exp(etaY)
+        YPolicyon_X3pct<- rnbinom(T, size = thetaY, mu = muY)
+        
+        
+        etaY <- B0 + B1*t + B2*P + B3*X1 + B4*(t^2) + beta_X2*X2_5pct  #Policy increases X by 2%
+        muY  <- exp(etaY)
+        YPolicyon_X5pct<- rnbinom(T, size = thetaY, mu = muY)
+        
+        #SPILL OVER
+        ##Spillover effect(opposite direction)
+        #etaZ <- b0 + b1 * t+b2* X1+b3*P+b4*(t^2)
+        #opposite
+        #PolicyEffectOnZ<-c(-0.015,-0.03,-0.05)
+        #PolicyEffectOnZ<-c(log(0.95),log(0.90),log(0.85),log(1.15))
+        #b3_1Pfivepct<-PolicyEffectOnZ[1]
+        #b3_3pct<-PolicyEffectOnZ[2]
+        #b4zz_1s<-PolicyEffectOnZ[3]
+        #b4zz_1o<-PolicyEffectOnZ[4]
+        etaZ <- b0 + b1 * t+b2* X1+((b4zz_1o)*P)+b4*(t^2)
+        muZ  <- exp(etaZ)
+        ZopposieDirSpil<- rnbinom(T, size = thetaZ, mu = muZ)
+        #same direction
+        etaZ <- b0 + b1 * t+b2* X1+((b4zz_1s)*P)+b4*(t^2) 
+        muZ  <- exp(etaZ)
+        ZsameDirSpil<- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        
+        
+        etaZ <- b0 + b1 * t+b2* X1+(b3_1Pfivepct*(P))+b4*(t^2) 
+        muZ  <- exp(etaZ)
+        ZsameDirSpil_1Pfivepct<- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        etaZ <- b0 + b1 * t+b2* X1+(b3_3pct*(P))+b4*(t^2)  
+        muZ  <- exp(etaZ)
+        ZsameDirSpil_3pct<- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        
+        ##TREND VIOLATION PLAYING WITH TIME(Z declining slower)
+        if (zslopPercent<=0){
+          etaZ <- b0 + mildparalleZ_Vf * t+ b2* X1+b4*(t^2)
+          muZ  <- exp(etaZ)
+          ZmildparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+          
+          etaZ <- b0 + StrongparalleZ_Vf * t+ b2* X1+b4*(t^2)
+          muZ  <- exp(etaZ)
+          ZmStrongparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+          
+          etaZ <- b0 + StrongerparalleZ_Vf* t+ b2* X1+b4*(t^2)
+          muZ  <- exp(etaZ)
+          ZmStrongerparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+        }
+        else{
+          with_preserve_seed({
+            etaZ <- b0 + mildparalleZ_Vp * t+ b2* X1+b4*(t^2)
+            muZ  <- exp(etaZ)
+            ZmildparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+            
+            etaZ <- b0 + StrongparalleZ_Vp * t+ b2* X1+b4*(t^2)
+            muZ  <- exp(etaZ)
+            ZmStrongparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+            
+            etaZ <- b0 + StrongerparalleZ_Vp* t+ b2* X1+b4*(t^2)
+            muZ  <- exp(etaZ)
+            ZmStrongerparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+          })
+          etaZ <- b0 + mildparalleZ_Vf * t+ b2* X1+b4*(t^2)
+          muZ  <- exp(etaZ)
+          rnbinom(T, size = thetaZ, mu = muZ)
+          
+          etaZ <- b0 + StrongparalleZ_Vf * t+ b2* X1+b4*(t^2)
+          muZ  <- exp(etaZ)
+          rnbinom(T, size = thetaZ, mu = muZ)
+          
+          etaZ <- b0 + StrongerparalleZ_Vf* t+ b2* X1+b4*(t^2)
+          muZ  <- exp(etaZ)
+          rnbinom(T, size = thetaZ, mu = muZ)
+          
+          
+        }
+        
+        
+        ##unshared Z confounder
+        #etaZ <- b0 + b1 * t+b4*(t^2)
+        #muZ  <- exp(etaZ)
+        #Z_unXrm<- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        #etaZ <- b0 + b1 * t+b2* X1
+        #muZ  <- exp(etaZ)
+        #Z_unCurve<- rnbinom(T, size = thetaZ, mu = muZ)
+        ##Y mediated
+        if (genX2==TRUE) with_preserve_seed({
+          #seed_before <- .Random.seed
+          #set.seed(seed + i)
+          etaYM<-B0 + B1*t + DE*P + B3*X1 + B4*(t^2) + beta_X2 * X2_scaled #Policy increases X by 2%
+          muY<- exp(etaYM)
+          Y_aff<- rnbinom(T, size = thetaY, mu = muY)
+          dat<- data.frame(t,Y_aff,X2_scaled,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
+          #.Random.seed <- seed_before
+        })else{
+          dat<- data.frame(t,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
+        }
+        
+        
+        
+        #dat<- data.frame(t,Y_aff,X2_scaled ,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
+        dat$j<-i
+        sim_listcommon[[i]]<-dat
+        ##unshared trend data
+        #etaY <- B0 + B1 * t + B2 * P + g1 * X1+u
+        #muY  <- exp(etaY)
+        #Y    <- rnbinom(T, size = thetaY, mu = muY)
+      }
+      
+    }
+    ## return BOTH
+    #list(common = sim_listcommon, uncommon = sim_listUncommon)
+    #sim_listcommonBO_Expected<-list()
+    #sim_listcommonBO_MinEf<-list()
+    #sim_listcommonBO_MaxEf<-list() 
+    if (oyaoya==1){
+      sim_listcommonBO_MinEf=sim_listcommon
+      #print("Minimal effect have",nrow())
+    }else if(oyaoya==2){
+      sim_listcommonBO_Expected=sim_listcommon 
+    }else{
+      sim_listcommonBO_MaxEf=sim_listcommon 
+    }
+    
+    
+    
+   oyaoya=oyaoya+1  
+  }
+list(sim_listcommonBO_MinEf=sim_listcommonBO_MinEf, sim_listcommonBO_Expected=sim_listcommonBO_Expected,sim_listcommonBO_MaxEf=sim_listcommonBO_MaxEf)
+  ##end function
+  }
+  
+##running this function to generate shared and unshared confounder# run u_s=0 for not adding AR(1)
+# Run with identical seed inside the function for fairness
+##COMAPRE SIMULATED Y in 10 simulations(nsim,seasonalX,vcoeffsY,vcoeffsZ,rhofd, sigma2fd,n,u_s=0,genX2=TRUE,zslopPercent=5,PincZsl=5,prop_MedX2=0.2,tensX2=1000,meanpreX2=2000,seed=123){ ##Let var be 3 times the mean. mean to variance ration for choosing overdispersion.Chose mean to var ratio of 2;mean=B0
+#setting seed
+o_false <- fredSiProject(10, seasonalX, vcoeffsY, vcoeffsZ,
+                         0.4, 0.1, 150, u_s = 1, genX2 = FALSE)
+
+o_true  <- fredSiProject(10, seasonalX, vcoeffsY, vcoeffsZ,
+                         0.4, 0.1, 150, u_s = 1, genX2 = TRUE)
+
+# Extract the same scenario from both
+f0 <- do.call(rbind, o_false$sim_listcommonBO_Expected)[, c("j","t","Y")]
+f1 <- do.call(rbind, o_true$sim_listcommonBO_Expected) [, c("j","t","Y")]
+
+# Align and compare Y
+o <- order(f0$j, f0$t); p <- order(f1$j, f1$t)
+all_equal <- all(f0$Y[o] == f1$Y[p])
+all_equal
+
+
+##Check if Y and Z dont change
+# Run A (percent violation)
+outA <- fredSiProject(10, seasonalX, vcoeffsY, vcoeffsZ, 0.4, 0.1, 150,
+                      u_s = 1, genX2 = TRUE, zslopPercent =5, PincZsl =5)
+A <- do.call(rbind, outA$sim_listcommonBO_MinEf)[, c("j","t","Y","Z")]
+
+# Run B (fixed slopes)
+outB <- fredSiProject(10, seasonalX, vcoeffsY, vcoeffsZ, 0.4, 0.1, 150,
+                      u_s = 1, genX2 = TRUE, zslopPercent = 0)
+B <- do.call(rbind, outB$sim_listcommonBO_MinEf)[, c("j","t","Y","Z")]
+
+A <- A[order(A$j, A$t), ]
+B <- B[order(B$j, B$t), ]
+
+identical(A$Y, B$Y)  # should be TRUE
+identical(A$Z, B$Z)  # should be TRUE
+
+# But violated Z series will differ:
+VA <- do.call(rbind, outA$sim_listcommonBO_Expected)[, c("j","t","ZmildparaV")]
+VB <- do.call(rbind, outB$sim_listcommonBO_Expected)[, c("j","t","ZmildparaV")]
+VA <- VA[order(VA$j, VA$t), ]; VB <- VB[order(VB$j, VB$t), ]
+identical(VA$ZmildparaV, VB$ZmildparaV)  # should be FALSE
+
+
+
+
+
+
+##RUN MAIN simulation(nsim,seasonalX,vcoeffsY,vcoeffsZ,rhofd, sigma2fd,n,u_s=0,genX2=TRUE,zslopPercent=5,PincZsl=5,prop_MedX2=0.2,tensX2=1000,meanpreX2=2000,seed=123){ ##Let var be 3 times the mean. mean to variance ration for choosing overdispersion.Chose mean to var ratio of 2;mean=B0
+#setting seed
+out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =1,genX2=TRUE,zslopPercent=5,PincZsl=5)
+names(out)
+#out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =0)
+#names(out)
+#d1_common   <- out$common[[1]]
+#d1_uncommon <- out$uncommon[[1]]
+##Bind all shared confounder simulation
+require(dplyr)
+common_all <- do.call(rbind, out$sim_listcommonBO_Expected)
+common_all<-common_all%>%arrange(j,t0)
+t0<-common_all$t0[1]
+tq<-common_all$tq[1]
+print(t0)
+print(tq)
+##drop these unnecessary columns
+#common_all$t0<-NULL
+#common_all$tq<-NULL
+
+common_all$tce<-common_all$t-t0
+common_all$Policy_Time<-((common_all$tce)*(common_all$P))
+##Expected B2
+common_all$EstimandScenario<-1
+saveRDS(common_all,"data/common_allExp.rds")
+
+
+
+##Minimal effect
+common_allMin<- do.call(rbind, out$sim_listcommonBO_MinEf)
+common_allMin<-common_allMin%>%arrange(j,t0)
+t0<-common_allMin$t0[1]
+tq<-common_allMin$tq[1]
+print(t0)
+print(tq)
+##drop these unnecessary columns
+#common_allMin$t0<-NULL
+#common_allMin$tq<-NULL
+
+common_allMin$tce<-common_allMin$t-t0
+common_allMin$Policy_Time<-((common_allMin$tce)*(common_allMin$P))
+##  Minimal B2
+common_allMin$EstimandScenario<-2
+saveRDS(common_allMin,"data/common_allMin.rds")
+
+
+
+
+
+##Maximum effect
+common_allMax<- do.call(rbind, out$sim_listcommonBO_MaxEf)
+common_allMax<-common_allMax%>%arrange(j,t0)
+t0<-common_allMax$t0[1]
+tq<-common_allMax$tq[1]
+print(t0)
+print(tq)
+##drop these unnecessary columns
+#common_allMax$t0<-NULL
+#common_allMax$tq<-NULL
+
+common_allMax$tce<-common_allMax$t-t0
+common_allMax$Policy_Time<-((common_allMax$tce)*(common_allMax$P))
+##  Maximum B2
+common_allMax$EstimandScenario<-3
+saveRDS(common_allMax,"data/common_allMax.rds")
+#View(common_all)
+##Append_ThemAll
+SimulatedData<-rbind(common_all,common_allMin, common_allMax)
+SimulatedData$EstimandScenario<-factor(SimulatedData$EstimandScenario,
+                                       levels = c(1, 2, 3),
+                                       labels = c("Expected", "minimum", "Maximum"))
+#Save dataset.
+saveRDS(SimulatedData,"data/SimulatedData.rds")
+##END OF SIMULATION
+
+
+##Test some collinearity As you adjust.
+
+common_all<-readRDS("data/SimulatedData.rds")
+
+#common_all<-common_all[common_all$EstimandScenario=="Expected",]
+common_all<-common_all[common_all$EstimandScenario=="Expected",]
+t0<-common_all$t0[1]
+tq<-common_all$tq[1]
+print(t0)
+print(tq)
+##drop these unnecessary columns
+common_all$t0<-NULL
+common_all$tq<-NULL
+nrow(common_all)
+View(common_all)
+#Analysis
+#delta correction
+delta<-0.0001
+
+##ANALYSIS
+##plot simulation
+## Pre-policy trends overtime.
+#Shared confounder common trend loess using first simulated data;
+dat<-common_all[common_all$j==1,]
+datpre <- subset(dat, P == 0|P == 1)
+
+datpre <- subset(dat, P == 0|P==1)
+# 1) All pairwise correlations among the 4 vars
+  cor(dat[, c("t", "P", "X1", "X2_1PointFivepct")],
+      use = "pairwise.complete.obs", method = "pearson")
+
+
+
+
+
