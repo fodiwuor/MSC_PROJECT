@@ -35,7 +35,7 @@ lagX2<-4
 lagtq<-2
 lagpstT0X1<-15
 ##differenZslope
-DifferentZSlope<-c(-0.0035,-0.0020,-0.0005)
+DifferentZSlope<-c(-0.0035,-0.0020,-0.0005,0.001)
 ## -0.0001 tune qudratic term its a problem
 EstimandMain<- -0.36
 #set seed
@@ -100,24 +100,28 @@ oyaoya<-1
       
       ##varyingZpretrend
       #DifferentZSlope<-c(-0.0035,-0.0020,-0.0005)
-      #if (zslopPercent<=0){
+      #if (zslopPercent<=0){ ZmStrongerparaV_zfaster StrongerparalleZ_Vp_zfaster
         mildparalleZ_Vf<-DifferentZSlope[1]
         StrongparalleZ_Vf<-DifferentZSlope[2]
         StrongerparalleZ_Vf<-DifferentZSlope[3]
+        StrongerparalleZ_VfInc<-DifferentZSlope[4]
       #}else {
         mildparalleZ_Vp<-((100-zslopPercent)/100)*B1
         StrongparalleZ_Vp<-((100-(zslopPercent+PincZsl))/100)*B1
         StrongerparalleZ_Vp<-((100-(zslopPercent+(2*PincZsl)))/100)*B1
+        StrongerparalleZ_Vp_zfaster<-((100+(zslopPercent+(2*PincZsl)))/100)*B1
       #}#Print the slope being used
         
         if (zslopPercent<=0){
           print(mildparalleZ_Vf)
           print(StrongparalleZ_Vf)
-          print(StrongerparalleZ_Vf) 
+          print(StrongerparalleZ_Vf)
+          print(StrongerparalleZ_VfInc)
         }else{
           print(mildparalleZ_Vp)
           print(StrongparalleZ_Vp)
-          print(StrongerparalleZ_Vp)  
+          print(StrongerparalleZ_Vp)
+          print(StrongerparalleZ_Vp_zfaster)
         }
       
 
@@ -338,6 +342,15 @@ oyaoya<-1
         etaZ <- b0 + StrongerparalleZ_Vf* t+ b2* X1+b4*(t^2)+u
         muZ  <- exp(etaZ)
         ZmStrongerparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+        
+        with_preserve_seed({
+          etaZ <- b0 +StrongerparalleZ_VfInc* t+ b2* X1+b4*(t^2)+u
+          muZ  <- exp(etaZ)
+          ZmStrongerparaV_zfaster<- rnbinom(T, size = thetaZ, mu = muZ)
+        }
+          
+        )
+
         }
         else{
           with_preserve_seed({
@@ -353,6 +366,15 @@ oyaoya<-1
             muZ  <- exp(etaZ)
             ZmStrongerparaV<- rnbinom(T, size = thetaZ, mu = muZ)
           })
+          
+          with_preserve_seed({
+            etaZ <- b0 +StrongerparalleZ_Vp_zfaster* t+ b2* X1+b4*(t^2)+u
+            muZ  <- exp(etaZ)
+            ZmStrongerparaV_zfaster<- rnbinom(T, size = thetaZ, mu = muZ)
+          }
+          
+          )
+          
           etaZ <- b0 + mildparalleZ_Vf * t+ b2* X1+b4*(t^2)+u
           muZ  <- exp(etaZ)
           rnbinom(T, size = thetaZ, mu = muZ)
@@ -383,10 +405,10 @@ oyaoya<-1
           etaYM<-B0 + B1*t + DE*P + B3*X1 + B4*(t^2) + beta_X2 * X2_scaled+u #Policy increases X by 2%
           muY<- exp(etaYM)
           Y_aff<- rnbinom(T, size = thetaY, mu = muY)
-          dat<- data.frame(t,Y_aff,X2_scaled,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
+          dat<- data.frame(t,ZmStrongerparaV_zfaster,Y_aff,X2_scaled,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
           #.Random.seed <- seed_before
         })else{
-          dat<- data.frame(t,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
+          dat<- data.frame(t,ZmStrongerparaV_zfaster,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
         }
 
         
@@ -479,6 +501,15 @@ oyaoya<-1
           etaZ <- b0 + StrongerparalleZ_Vf* t+ b2* X1+b4*(t^2)
           muZ  <- exp(etaZ)
           ZmStrongerparaV<- rnbinom(T, size = thetaZ, mu = muZ)
+          
+          with_preserve_seed({
+            etaZ <- b0 +StrongerparalleZ_VfInc* t+ b2* X1+b4*(t^2)
+            muZ  <- exp(etaZ)
+            ZmStrongerparaV_zfaster<- rnbinom(T, size = thetaZ, mu = muZ)
+          }
+          
+          )
+          
         }
         else{
           with_preserve_seed({
@@ -494,6 +525,15 @@ oyaoya<-1
             muZ  <- exp(etaZ)
             ZmStrongerparaV<- rnbinom(T, size = thetaZ, mu = muZ)
           })
+          
+          with_preserve_seed({
+            etaZ <- b0 +StrongerparalleZ_Vp_zfaster* t+ b2* X1+b4*(t^2)
+            muZ  <- exp(etaZ)
+            ZmStrongerparaV_zfaster<- rnbinom(T, size = thetaZ, mu = muZ)
+          }
+          
+          )
+          
           etaZ <- b0 + mildparalleZ_Vf * t+ b2* X1+b4*(t^2)
           muZ  <- exp(etaZ)
           rnbinom(T, size = thetaZ, mu = muZ)
@@ -525,10 +565,10 @@ oyaoya<-1
           etaYM<-B0 + B1*t + DE*P + B3*X1 + B4*(t^2) + beta_X2 * X2_scaled #Policy increases X by 2%
           muY<- exp(etaYM)
           Y_aff<- rnbinom(T, size = thetaY, mu = muY)
-          dat<- data.frame(t,Y_aff,X2_scaled,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
+          dat<- data.frame(t,ZmStrongerparaV_zfaster,Y_aff,X2_scaled,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
           #.Random.seed <- seed_before
         })else{
-          dat<- data.frame(t,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
+          dat<- data.frame(t,ZmStrongerparaV_zfaster,x2RawX2_3pct,x2rawX2_5pct,x2RawX2_1PointFivepct, P,X1,Y,YPolicyon_X1pFivepct,YPolicyon_X3pct,YPolicyon_X5pct,X2_1PointFivepct,X2_3pct,X2_5pct,ZmildparaV,ZmStrongparaV,ZmStrongerparaV,ZsameDirSpil_1Pfivepct,ZsameDirSpil_3pct,Z,ZsameDirSpil,ZopposieDirSpil,t0=t0,tq=tq)
         }
         
         
@@ -615,7 +655,7 @@ identical(VA$ZmildparaV, VB$ZmildparaV)  # should be FALSE
 
 ##RUN MAIN simulation(nsim,seasonalX,vcoeffsY,vcoeffsZ,rhofd, sigma2fd,n,u_s=0,genX2=TRUE,zslopPercent=5,PincZsl=5,prop_MedX2=0.2,tensX2=1000,meanpreX2=2000,seed=123){ ##Let var be 3 times the mean. mean to variance ration for choosing overdispersion.Chose mean to var ratio of 2;mean=B0
 #setting seed
-out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =1,genX2=TRUE,zslopPercent=5,PincZsl=5)
+out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =1,genX2=TRUE,zslopPercent=10,PincZsl=10)
 names(out)
 #out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =0)
 #names(out)
