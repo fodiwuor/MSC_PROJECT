@@ -299,6 +299,21 @@ common_allx<-function(common_all,TrdAR=1,AutomaBandAR=2,delta=0.0001,lagnewestPR
   common_all$Pstd_estimateCITS_Spil15Incpct<-NA
   common_all$P_pValueCITS_Spil15Incpct<-NA
   
+  ##Control violating common trend assumption;
+  common_all$P_estimateCITS_MildctrendV<-NA
+  common_all$Pstd_estimateCITS_MildctrendV<-NA
+  common_all$P_pValueCITS_MildctrendV<-NA
+  
+  common_all$P_estimateCITS_ModeratectrendV<-NA
+  common_all$Pstd_estimateCITS_ModeratectrendV<-NA
+  common_all$P_pValueCITS_ModeratectrendV<-NA
+  
+  common_all$P_estimateCITS_StrongctrendV<-NA
+  common_all$Pstd_estimateCITS_StrongctrendV<-NA
+  common_all$P_pValueCITS_StrongctrendV<-NA
+  
+  
+  
   #AR order traditional regression na auto-corelation simulated
   common_all$TrdarOrderfull<-NA
   
@@ -721,6 +736,112 @@ common_allx<-function(common_all,TrdAR=1,AutomaBandAR=2,delta=0.0001,lagnewestPR
     }
     
     
+    
+    ##Common trend model CITS with common trend violation
+    ##Mild violation
+    m_off<- glm(Y ~P+ offset(log(ZmildparaV+delta)),
+                family =fam_nb, data =nkkdt)
+    
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    if (AutomaBandAR==1){
+      L<-nw_vcovpre(m_off,L,nkkdt$t)
+    }else{
+      L<-L
+    }
+    
+    print(paste("Lag for whole period is",L,sep=""))
+    #coefficient
+    
+    Vpre   <-nw_vcov(m_off,L)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off)["P"] / sqrt(diag(Vpre)["P"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t  
+    
+    #common_all$P_estimateCITS_Spil15Decpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Decpct<-NA
+    #common_all$P_pValueCITS_Spil15Decpct<-NA
+    #common_all$P_estimateCITS_Spil15Incpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Incpct<-NA
+    #common_all$P_pValueCITS_Spil15Incpct<-NA
+    
+    common_all$P_estimateCITS_MildctrendV[kl]<-coef(m_off)["P"]
+    common_all$Pstd_estimateCITS_MildctrendV[kl]<-sqrt(diag(Vpre)["P"])
+    common_all$P_pValueCITS_MildctrendV[kl]<-koblo 
+    
+    
+    ###Moderate Violation
+    m_off<- glm(Y ~P+ offset(log(ZmStrongparaV+delta)),
+                family =fam_nb, data =nkkdt)
+    
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    if (AutomaBandAR==1){
+      L<-nw_vcovpre(m_off,L,nkkdt$t)
+    }else{
+      L<-L
+    }
+    
+    print(paste("Lag for whole period is",L,sep=""))
+    #coefficient
+    
+    Vpre   <-nw_vcov(m_off,L)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off)["P"] / sqrt(diag(Vpre)["P"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t  
+    
+    #common_all$P_estimateCITS_Spil15Decpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Decpct<-NA
+    #common_all$P_pValueCITS_Spil15Decpct<-NA
+    #common_all$P_estimateCITS_Spil15Incpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Incpct<-NA
+    #common_all$P_pValueCITS_Spil15Incpct<-NA
+    
+    common_all$P_estimateCITS_ModeratectrendV[kl]<-coef(m_off)["P"]
+    common_all$Pstd_estimateCITS_ModeratectrendV[kl]<-sqrt(diag(Vpre)["P"])
+    common_all$P_pValueCITS_ModeratectrendV[kl]<-koblo 
+    
+    
+    
+    ##Strong violation
+    m_off<- glm(Y ~P+ offset(log(ZmStrongerparaV+delta)),
+                family =fam_nb, data =nkkdt)
+    
+    #coefficient
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    if (AutomaBandAR==1){
+      L<-nw_vcovpre(m_off,L,nkkdt$t)
+    }else{
+      L<-L
+    }
+    
+    print(paste("Lag for whole period is",L,sep=""))
+    #coefficient
+    
+    Vpre   <-nw_vcov(m_off,L)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off)["P"] / sqrt(diag(Vpre)["P"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t  
+    
+    #common_all$P_estimateCITS_Spil15Decpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Decpct<-NA
+    #common_all$P_pValueCITS_Spil15Decpct<-NA
+    #common_all$P_estimateCITS_Spil15Incpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Incpct<-NA
+    #common_all$P_pValueCITS_Spil15Incpct<-NA
+    
+    common_all$P_estimateCITS_StrongctrendV[kl]<-coef(m_off)["P"]
+    common_all$Pstd_estimateCITS_Strongctrend[kl]<-sqrt(diag(Vpre)["P"])
+    common_all$P_pValueCITS_StrongctrendV[kl]<-koblo 
+    
+    
+
     
     
     
