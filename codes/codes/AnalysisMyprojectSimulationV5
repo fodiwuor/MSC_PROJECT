@@ -314,6 +314,8 @@ common_allx<-function(common_all,TrdAR=1,AutomaBandAR=2,delta=0.0001,lagnewestPR
   
   #Z declining faster
   common_all$P_estimateCITS_StrongctrendV_zfaster<-NA
+  common_all$P_estimateCITS_StrongctrendV_zfastertime_adjusted<-NA
+  common_all$Pstd_estimateCITS_StrongctrendV_zfaster_adjusted<-NA
   common_all$Pstd_estimateCITS_StrongctrendV_zfaster<-NA
   common_all$P_pValueCITS_StrongctrendV_zfaster<-NA
   
@@ -913,6 +915,39 @@ common_allx<-function(common_all,TrdAR=1,AutomaBandAR=2,delta=0.0001,lagnewestPR
     common_all$P_pValueCITS_StrongctrendV_zfaster[kl]<-koblo 
     
 
+    ##Z faster time adjusted
+    m_off<- glm(Y ~P+t+ offset(log(ZmStrongerparaV_zfaster+delta)),
+                family =fam_nb, data =nkkdt)
+    
+    #coefficientZmStrongerparaV_zfaster
+    #common_all$coef_tZstngerV[kl]<-coef(m_off1)["t"]
+    if (AutomaBandAR==1){
+      L<-nw_vcovpre(m_off,L,nkkdt$t)
+    }else{
+      L<-L
+    }
+    
+    print(paste("Lag for whole period is",L,sep=""))
+    #coefficient
+    
+    Vpre   <-nw_vcov(m_off,L)
+    # pull p-value for t using HAC:
+    z_t    <- coef(m_off)["P"] / sqrt(diag(Vpre)["P"])
+    p_t    <- 2 * pnorm(-abs(z_t))
+    #p_value
+    koblo<-p_t  
+    
+    #common_all$P_estimateCITS_Spil15Decpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Decpct<-NA
+    #common_all$P_pValueCITS_Spil15Decpct<-NA
+    #common_all$P_estimateCITS_Spil15Incpct<-NA
+    #common_all$Pstd_estimateCITS_Spil15Incpct<-NA
+    #common_all$P_pValueCITS_Spil15Incpct<-NA
+    
+    common_all$P_estimateCITS_StrongctrendV_zfastertime_adjusted[kl]<-coef(m_off)["P"]
+    common_all$Pstd_estimateCITS_StrongctrendV_zfaster_adjusted[kl]<-sqrt(diag(Vpre)["P"])
+    
+    
     
     
     ##traditional regression 
@@ -1111,9 +1146,15 @@ common_all<-common_allx(common_all,1,2)
 #common_all<-common_allx(common_all)
 #lets try user lag 7
 #common_all<-common_allx(common_all,7)
+##Saving dataset
+saveRDS(common_all,"data/common_all.rds")
+common_all<-readRDS("data/common_all.rds")
+
 results<-common_all
 common_all<-results$common_all
 View(common_all)
+
+
 ##extract others
 power_CITS<-results$power_CITS
 power_CITS5pct<-results$power_CITS5pct
@@ -1145,6 +1186,8 @@ pwaMCSE(power_CITS1,n)
 power_CITS1<-(countPlessAlphaCITS/gh)*100
 print(power_CITS1)
 pwaMCSE(power_CITS1,gh)
+
+
 
 
 ##Mid violation
@@ -1188,6 +1231,19 @@ pwaMCSE(power_CITS1,n)
 power_CITS1<-(countPlesalphaZCITS_SngerV/gh)*100
 print(power_CITS1)
 pwaMCSE(power_CITS1,gh)
+##stonger violation 30% increase
+v<-common_all$CMNassumpstrongViolation_zfaster_Pvalue
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
+
+
+
+
 
 ##additional calculations:
 propReje_ZV<-round(((countPlesalphaZCITS_SngerV/gh)*100),2)
@@ -1340,8 +1396,12 @@ commonV<-common_all[common_all$CommonAsssumption_Pvalue<=0.05 & !is.na(common_al
 
 
 
+
 ##mean of CITS P and standard error
 ##mean coef
+##The effect
+True_B<-0.96
+
 CITS_Pmean<-mean(common_all$P_estimateCITS,na.rm =TRUE)
 print(CITS_Pmean)
 
@@ -1361,28 +1421,28 @@ fredMC(commonV,P_estimateCITS,Pstd_estimateCITS)
 MCSE_bias(common_all,P_estimateCITS)
 MCSE_bias(commonV,P_estimateCITS)
 ##Bias estimate
-bias(common_all,P_estimateCITS,log(0.6))
+bias(common_all,P_estimateCITS,log(True_B))
 #bias
-bias(commonV,P_estimateCITS,log(0.7))
+bias(commonV,P_estimateCITS,log(True_B))
 
 
 
 
 
 ##MSE
-MSE(common_all,"P_estimateCITS",log(0.7))
-MSE(commonV,"P_estimateCITS",log(0.7))
+MSE(common_all,"P_estimateCITS",log(True_B))
+MSE(commonV,"P_estimateCITS",log(True_B))
 
 
 ##MCSE_MSE
-MCSE_MSE(common_all,P_estimateCITS,log(0.7))
-MCSE_MSE(commonV,P_estimateCITS,log(0.7))
+MCSE_MSE(common_all,P_estimateCITS,log(True_B))
+MCSE_MSE(commonV,P_estimateCITS,log(True_B))
 
 
 ##Coverage
-FredCoverage(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7))
+FredCoverage(common_all,P_estimateCITS,Pstd_estimateCITS,log(True_B))
 ##Coverage
-FredCoverage(commonV,P_estimateCITS,Pstd_estimateCITS,log(0.7))
+FredCoverage(commonV,P_estimateCITS,Pstd_estimateCITS,log(True_B))
 
 #FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
 ##Power CITS
@@ -1421,7 +1481,7 @@ CITS_Pmean<-mean(common_all$P_estimateCITS_Spil5pct,na.rm =TRUE)
 print(CITS_Pmean)
 
 ##Bias estimate
-bias(common_all,P_estimateCITS_Spil5pct,log(0.6))
+bias(common_all,P_estimateCITS_Spil5pct,log(True_B))
 
 
 ##standard error of Estimate(overal)
@@ -1433,17 +1493,17 @@ MCSE_bias(common_all,P_estimateCITS_Spil5pct)
 
 
 ##MSE
-MSE(common_all,"P_estimateCITS_Spil5pct",log(0.6))
+MSE(common_all,"P_estimateCITS_Spil5pct",log(True_B))
 
 
 
 ##MCSE_MSE
-MCSE_MSE(common_all,P_estimateCITS_Spil5pct,log(0.6))
+MCSE_MSE(common_all,P_estimateCITS_Spil5pct,log(True_B))
 
 
 
 ##Coverage
-FredCoverage(common_all,P_estimateCITS_Spil5pct,Pstd_estimateCITS_Spil5pct,log(0.6))
+FredCoverage(common_all,P_estimateCITS_Spil5pct,Pstd_estimateCITS_Spil5pct,log(True_B))
 
 
 #FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
@@ -1476,7 +1536,7 @@ print(CITS_Pmean)
 fredMC(common_all,P_estimateCITS_Spil10pct,Pstd_estimateCITS_Spil10pct)
 
 ##Bias estimate
-bias(common_all,P_estimateCITS_Spil10pct,log(0.6))
+bias(common_all,P_estimateCITS_Spil10pct,log(True_B))
 
 #MCSE of bias
 MCSE_bias(common_all,P_estimateCITS_Spil10pct)
@@ -1484,17 +1544,17 @@ MCSE_bias(common_all,P_estimateCITS_Spil10pct)
 
 
 ##MSE
-MSE(common_all,"P_estimateCITS_Spil10pct",log(0.6))
+MSE(common_all,"P_estimateCITS_Spil10pct",log(True_B))
 
 
 
 ##MCSE_MSE
-MCSE_MSE(common_all,P_estimateCITS_Spil10pct,log(0.6))
+MCSE_MSE(common_all,P_estimateCITS_Spil10pct,log(True_B))
 
 
 
 ##Coverage
-FredCoverage(common_all,P_estimateCITS_Spil10pct,Pstd_estimateCITS_Spil10pct,log(0.6))
+FredCoverage(common_all,P_estimateCITS_Spil10pct,Pstd_estimateCITS_Spil10pct,log(True_B))
 
 
 #FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
@@ -1528,7 +1588,7 @@ print(CITS_Pmean)
 ##standard error of Estimate(overal)
 fredMC(common_all,P_estimateCITS_Spil15Decpct,Pstd_estimateCITS_Spil15Decpct)
 #Bias
-bias(common_all,P_estimateCITS_Spil15Decpct,log(0.6))
+bias(common_all,P_estimateCITS_Spil15Decpct,log(True_B))
 
 #MCSE of bias
 MCSE_bias(common_all,P_estimateCITS_Spil15Decpct)
@@ -1536,17 +1596,17 @@ MCSE_bias(common_all,P_estimateCITS_Spil15Decpct)
 
 
 ##MSE
-MSE(common_all,"P_estimateCITS_Spil15Decpct",log(0.6))
+MSE(common_all,"P_estimateCITS_Spil15Decpct",log(True_B))
 
 
 
 ##MCSE_MSE
-MCSE_MSE(common_all,P_estimateCITS_Spil15Decpct,log(0.7))
+MCSE_MSE(common_all,P_estimateCITS_Spil15Decpct,log(True_B))
 
 
 
 ##Coverage
-FredCoverage(common_all,P_estimateCITS_Spil15Decpct,Pstd_estimateCITS_Spil15Decpct,log(0.6))
+FredCoverage(common_all,P_estimateCITS_Spil15Decpct,Pstd_estimateCITS_Spil15Decpct,log(True_B))
 
 
 #FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
@@ -1579,7 +1639,7 @@ print(CITS_Pmean)
 fredMC(common_all,P_estimateCITS_Spil15Incpct,Pstd_estimateCITS_Spil15Incpct)
 
 #Bias
-bias(common_all,P_estimateCITS_Spil15Incpct,log(0.6))
+bias(common_all,P_estimateCITS_Spil15Incpct,log(True_B))
 
 #MCSE of bias
 MCSE_bias(common_all,P_estimateCITS_Spil15Incpct)
@@ -1587,17 +1647,17 @@ MCSE_bias(common_all,P_estimateCITS_Spil15Incpct)
 
 
 ##MSE
-MSE(common_all,"P_estimateCITS_Spil15Incpct",log(0.6))
+MSE(common_all,"P_estimateCITS_Spil15Incpct",log(True_B))
 
 
 
 ##MCSE_MSE
-MCSE_MSE(common_all,P_estimateCITS_Spil15Incpct,log(0.6))
+MCSE_MSE(common_all,P_estimateCITS_Spil15Incpct,log(True_B))
 
 
 
 ##Coverage
-FredCoverage(common_all,P_estimateCITS_Spil15Incpct,Pstd_estimateCITS_Spil15Incpct,log(0.6))
+FredCoverage(common_all,P_estimateCITS_Spil15Incpct,Pstd_estimateCITS_Spil15Incpct,log(True_B))
 
 
 #FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
@@ -1631,7 +1691,7 @@ print(CITS_Pmean)
 fredMC(common_all,P_estimateCITS_MildctrendV,Pstd_estimateCITS_MildctrendV)
 
 #Bias
-bias(common_all,P_estimateCITS_MildctrendV,log(0.96))
+bias(common_all,P_estimateCITS_MildctrendV,log(True_B))
 
 #MCSE of bias
 MCSE_bias(common_all,P_estimateCITS_MildctrendV)
@@ -1639,17 +1699,17 @@ MCSE_bias(common_all,P_estimateCITS_MildctrendV)
 
 
 ##MSE
-MSE(common_all,"P_estimateCITS_MildctrendV",log(0.96))
+MSE(common_all,"P_estimateCITS_MildctrendV",log(True_B))
 
 
 
 ##MCSE_MSE
-MCSE_MSE(common_all,P_estimateCITS_MildctrendV,log(0.96))
+MCSE_MSE(common_all,P_estimateCITS_MildctrendV,log(True_B))
 
 
 
 ##Coverage
-FredCoverage(common_all,P_estimateCITS_MildctrendV,Pstd_estimateCITS_MildctrendV,log(0.96))
+FredCoverage(common_all,P_estimateCITS_MildctrendV,Pstd_estimateCITS_MildctrendV,log(True_B))
 
 
 #FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
@@ -1675,7 +1735,7 @@ print(CITS_Pmean)
 fredMC(common_all,P_estimateCITS_ModeratectrendV,Pstd_estimateCITS_ModeratectrendV)
 
 #Bias
-bias(common_all,P_estimateCITS_ModeratectrendV,log(0.96))
+bias(common_all,P_estimateCITS_ModeratectrendV,log(True_B))
 
 #MCSE of bias
 MCSE_bias(common_all,P_estimateCITS_ModeratectrendV)
@@ -1683,17 +1743,17 @@ MCSE_bias(common_all,P_estimateCITS_ModeratectrendV)
 
 
 ##MSE
-MSE(common_all,"P_estimateCITS_ModeratectrendV",log(0.96))
+MSE(common_all,"P_estimateCITS_ModeratectrendV",log(True_B))
 
 
 
 ##MCSE_MSE
-MCSE_MSE(common_all,P_estimateCITS_ModeratectrendV,log(0.96))
+MCSE_MSE(common_all,P_estimateCITS_ModeratectrendV,log(True_B))
 
 
 
 ##Coverage
-FredCoverage(common_all,P_estimateCITS_ModeratectrendV,Pstd_estimateCITS_ModeratectrendV,log(0.96))
+FredCoverage(common_all,P_estimateCITS_ModeratectrendV,Pstd_estimateCITS_ModeratectrendV,log(True_B))
 
 
 #FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
@@ -1712,7 +1772,7 @@ pwaMCSE(power_CITS1,n)
 
 
 ##Stong violation of common trend Assumption
-##30%
+##30% slower for Z
 CITS_Pmean<-mean(common_all$P_estimateCITS_StrongctrendV,na.rm =TRUE)
 print(CITS_Pmean)
 
@@ -1721,7 +1781,7 @@ print(CITS_Pmean)
 fredMC(common_all,P_estimateCITS_StrongctrendV,Pstd_estimateCITS_StrongctrendV)
 
 #Bias
-bias(common_all,P_estimateCITS_StrongctrendV,log(0.96))
+bias(common_all,P_estimateCITS_StrongctrendV,log(True_B))
 
 #MCSE of bias
 MCSE_bias(common_all,P_estimateCITS_StrongctrendV)
@@ -1729,23 +1789,23 @@ MCSE_bias(common_all,P_estimateCITS_StrongctrendV)
 
 
 ##MSE
-MSE(common_all,"P_estimateCITS_StrongctrendV",log(0.96))
+MSE(common_all,"P_estimateCITS_StrongctrendV",log(True_B))
 
 
 
 ##MCSE_MSE
-MCSE_MSE(common_all,P_estimateCITS_StrongctrendV,log(0.96))
+MCSE_MSE(common_all,P_estimateCITS_StrongctrendV,log(True_B))
 
 
 
 ##Coverage
-FredCoverage(common_all,P_estimateCITS_StrongctrendV,Pstd_estimateCITS_StrongctrendV,log(0.96))
+FredCoverage(common_all,P_estimateCITS_StrongctrendV,Pstd_estimateCITS_StrongctrendV,log(True_B))
 
 
 #FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
 ##Power CITS
 #common_all$P_pValueCITS_Spil5pct
-v<-common_all$P_pValueCITS_ModeratectrendV
+v<-common_all$P_pValueCITS_StrongctrendV
 v<-v[!is.na(v)]
 n<-length(v)
 print(n)
@@ -1755,6 +1815,54 @@ print(power_CITS1)
 pwaMCSE(power_CITS1,n)
 
 
+
+
+
+##30% faster for Z
+CITS_Pmean<-mean(common_all$P_estimateCITS_StrongctrendV_zfaster,na.rm =TRUE)
+print(CITS_Pmean)
+
+##time adjusted lets see what happens
+CITS_Pmean<-mean(common_all$P_estimateCITS_StrongctrendV_zfastertime_adjusted,na.rm =TRUE)
+print(CITS_Pmean)
+
+
+##standard error of Estimate(overal)
+fredMC(common_all,P_estimateCITS_StrongctrendV_zfaster,Pstd_estimateCITS_StrongctrendV_zfaster)
+
+#Bias
+bias(common_all,P_estimateCITS_StrongctrendV_zfaster,log(True_B))
+
+#MCSE of bias
+MCSE_bias(common_all,P_estimateCITS_StrongctrendV_zfaster)
+
+
+
+##MSE
+MSE(common_all,"P_estimateCITS_StrongctrendV_zfaster",log(True_B))
+
+
+
+##MCSE_MSE
+MCSE_MSE(common_all,P_estimateCITS_StrongctrendV_zfaster,log(True_B))
+
+
+
+##Coverage
+FredCoverage(common_all,P_estimateCITS_StrongctrendV_zfaster,Pstd_estimateCITS_StrongctrendV_zfaster,log(True_B))
+
+
+#FredCoverageT(common_all,P_estimateCITS,Pstd_estimateCITS,log(0.7),j,alpha=0.05)
+##Power CITS
+#common_all$P_pValueCITS_Spil5pct
+v<-common_all$P_pValueCITS_StrongctrendV_zfaster
+v<-v[!is.na(v)]
+n<-length(v)
+print(n)
+v1<-length(which(v<=0.05))
+power_CITS1<-(v1/n)*100
+print(power_CITS1)
+pwaMCSE(power_CITS1,n)
 
 
 
@@ -1772,15 +1880,15 @@ print(Trd_Pmean)
 fredMC(common_all,P_estimateTrd,Pstd_estimateTrd)
 
 #bias
-bias(common_all,P_estimateTrd,log(0.6))
+bias(common_all,P_estimateTrd,log(True_B))
 #MCSE of bias
 MCSE_bias(common_all,P_estimateTrd)
 ##MSE
-MSE(common_all,"P_estimateTrd",log(0.7))
+MSE(common_all,"P_estimateTrd",log(True_B))
 #MCSE_MSE
-MCSE_MSE(common_all,P_estimateTrd,log(0.7))
+MCSE_MSE(common_all,P_estimateTrd,log(True_B))
 ##Coverage
-FredCoverage(common_all,P_estimateTrd,Pstd_estimateTrd,log(0.7))
+FredCoverage(common_all,P_estimateTrd,Pstd_estimateTrd,log(True_B))
 #FredCoverageT(common_all,P_estimateTrd,Pstd_estimateTrd,log(0.7),j,alpha=0.05);confirmed also working
 
 #power
@@ -1796,17 +1904,17 @@ print(mean(common_all$P_estimateTrdX1_no,na.rm = TRUE))
 #MC standard error
 fredMC(common_all,P_estimateTrdX1_no)
 #bias
-bias(common_all,P_estimateTrdX1_no,log(0.6))
+bias(common_all,P_estimateTrdX1_no,log(True_B))
 
 #MCSE of bias
 MCSE_bias(common_all,P_estimateTrdX1_no)
 
 ##MSE
-MSE(common_all,"P_estimateTrdX1_no",log(0.7))
+MSE(common_all,"P_estimateTrdX1_no",log(True_B))
 #MCSE_MSE
-MCSE_MSE(common_all,P_estimateTrdX1_no,log(0.7))
+MCSE_MSE(common_all,P_estimateTrdX1_no,log(True_B))
 ##Coverage
-FredCoverage(common_all,P_estimateTrdX1_no,Pstd_estimateTrdX1_no,log(0.7))
+FredCoverage(common_all,P_estimateTrdX1_no,Pstd_estimateTrdX1_no,log(True_B))
 #power
 print(power_TrdnoX1)
 powertrt1<-(power_TrdnoX1/gh)*100
@@ -1821,20 +1929,20 @@ print(mean(common_all$P_estimateTrd_t_no,na.rm = TRUE))
 #MC standard error
 fredMC(common_all,P_estimateTrd_t_no)
 #bias
-bias(common_all,P_estimateTrd_t_no,log(0.6))
+bias(common_all,P_estimateTrd_t_no,log(True_B))
 
 #MCSE of bias
 MCSE_bias(common_all,P_estimateTrd_t_no)
 
 ##MSE
-MSE(common_all,"P_estimateTrd_t_no",log(0.7))
+MSE(common_all,"P_estimateTrd_t_no",log(True_B))
 
 #MCSE_MSE
-MCSE_MSE(common_all,P_estimateTrd_t_no,log(0.7))
+MCSE_MSE(common_all,P_estimateTrd_t_no,log(True_B))
 
 ##Coverage
-FredCoverage(common_all,P_estimateTrd_t_no,Pstd_estimateTr_t_no,log(0.7))
-FredCoverageT(common_all,P_estimateTrd_t_no,Pstd_estimateTr_t_no,log(0.7),j,alpha=0.05)
+FredCoverage(common_all,P_estimateTrd_t_no,Pstd_estimateTr_t_no,log(True_B))
+FredCoverageT(common_all,P_estimateTrd_t_no,Pstd_estimateTr_t_no,log(True_B),j,alpha=0.05)
 #power
 print(power_Trdno_t)
 powertrt1<-(power_Trdno_t/gh)*100
