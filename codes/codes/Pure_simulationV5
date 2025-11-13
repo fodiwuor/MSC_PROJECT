@@ -23,7 +23,7 @@ seasonalX<-c(log(1.04),log(0.98),log(1.04),log(1.01))
 
 #sim_listUncommon<-list() choose bernal paper on Its to inform Bo,for Y 600,for z 700 #(log(1.75)/(-0.9))
 vcoeffsY<-c(log(700),log(0.995),log(0.96),log(0.70),log(0.60),(log(0.84)/(x1drop_schock)),log(1),350)#vary B2 (-0.04,-0.36,-0.51) #B0,B1(time),B2(policy),B3(confounder),thetaY repectilvely
-vcoeffsZ<-c(log(900),log(0.995),(log(0.84)/(-0.9)),log(1.05),log(1),350) # bo,b1(time),b2(confounder),thetaZ.Lets tKE 90% trend,coef
+vcoeffsZ<-c(log(900),log(0.995),(log(0.84)/(x1drop_schock)),log(1.05),log(1),350) # bo,b1(time),b2(confounder),thetaZ.Lets tKE 90% trend,coef
 #PolicyEffectOnZ<-c(log(0.985),log(0.97),log(0.95)) previous but let me make it 5% 10% 15%(also oposite for 15%)  too as below
 PolicyEffectOnZ<-c(log(0.95),log(0.90),log(0.85),log(1.15))
 #policy on X
