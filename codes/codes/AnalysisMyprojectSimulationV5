@@ -22,31 +22,31 @@ pwaMCSE<-function(powerPERCENT,countfre){
 
 
 #coverage
-FredCoverageT<-function(d,Estimate,std,thetaTrue,j,alpha=0.05){ 
-  xstd<-d[[deparse(substitute(std))]]
-  xstd<-xstd[!is.na(xstd)]
-  n<-length(xstd) 
-  print(length(xstd)) 
-  estimate_theta<-d[[deparse(substitute(Estimate))]] 
-  estimate_theta<-estimate_theta[!is.na(estimate_theta)]
-  print(length(estimate_theta)) 
-  z_crit <- qnorm(1 - alpha/2) 
-  marginError<-(z_crit*xstd) 
-  countcurve<-0  #maxjk<-max(d[[deparse(substitute(j))]]) 
-  for (i in 1:n) { 
-    letmi <- marginError[i] 
-    estimate_thetaf <-estimate_theta[i] 
-    if ((estimate_thetaf - letmi) <= thetaTrue && thetaTrue <= (estimate_thetaf + letmi)) { 
-      countcurve <- countcurve + 1 
-    } 
-    else { countcurve <- countcurve + 0 # redundant; can be removed } 
-    } 
+#FredCoverageT<-function(d,Estimate,std,thetaTrue,j,alpha=0.05){ 
+  #xstd<-d[[deparse(substitute(std))]]
+  #xstd<-xstd[!is.na(xstd)]
+  #n<-length(xstd) 
+  #print(length(xstd)) 
+  #estimate_theta<-d[[deparse(substitute(Estimate))]] 
+  #estimate_theta<-estimate_theta[!is.na(estimate_theta)]
+  #print(length(estimate_theta)) 
+  #z_crit <- qnorm(1 - alpha/2) 
+  #marginError<-(z_crit*xstd) 
+  #countcurve<-0  #maxjk<-max(d[[deparse(substitute(j))]]) 
+  #for (i in 1:n) { 
+    #letmi <- marginError[i] 
+    #estimate_thetaf <-estimate_theta[i] 
+    #if ((estimate_thetaf - letmi) <= thetaTrue && thetaTrue <= (estimate_thetaf + letmi)) { 
+    #  countcurve <- countcurve + 1 
+    #} 
+    #else { countcurve <- countcurve + 0 # redundant; can be removed } 
+    #} 
     
-  }
-  cover<-(countcurve/n) 
-  MCSE_cover<-sqrt((cover*(1-cover))/(n)) 
-  print(paste("Coverage is:",cover,"Its MCSE is:",MCSE_cover)) 
-}
+  #}
+  #cover<-(countcurve/n) 
+  #MCSE_cover<-sqrt((cover*(1-cover))/(n)) 
+  #print(paste("Coverage is:",cover,"Its MCSE is:",MCSE_cover)) 
+#}
 
 
 
