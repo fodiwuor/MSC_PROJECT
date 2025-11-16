@@ -706,6 +706,10 @@ f1 <- dplyr::bind_rows(f1_list, .id = "sim") |>
 ## 3) Compare Y
 identical(f0$Y, f1$Y)
 
+
+rm(f0,f1,f0_list,o_false,o_true ,f1_list )
+gc()
+
 ##Check if Y and Z dont change
 ## --- choose the block you want to compare ---
 rho_key <- "0.4"
@@ -749,7 +753,8 @@ identical(VA$ZmildparaV, VB$ZmildparaV)  # expect FALSE
 
 
 
-
+rm(outA,outB,A,B,VA,VB)
+gc()
 ##RUN MAIN simulation(nsim,seasonalX,vcoeffsY,vcoeffsZ,rhofd, sigma2fd,n,u_s=0,genX2=TRUE,zslopPercent=5,PincZsl=5,prop_MedX2=0.2,tensX2=1000,meanpreX2=2000,seed=123){ ##Let var be 3 times the mean. mean to variance ration for choosing overdispersion.Chose mean to var ratio of 2;mean=B0
 #setting seed
 #averaging_n=150,you can set averaging n to any values for which you want to preent results if results are so many
@@ -793,7 +798,7 @@ for (eve in rhofd ){
     # 5) Save
     common_all$sim<-NULL
     if (!dir.exists("data")) dir.create("data", recursive = TRUE)
-    saveRDS(common_all, "data/common_allExp.rds")
+    #saveRDS(common_all, "data/common_allExp.rds")
     
     
     
@@ -820,7 +825,7 @@ for (eve in rhofd ){
     common_allMin$sim<-NULL
     # 5) Save
     if (!dir.exists("data")) dir.create("data", recursive = TRUE)
-    saveRDS(common_allMin, "data/common_allMin.rds")
+    #saveRDS(common_allMin, "data/common_allMin.rds")
     
     
     
@@ -848,7 +853,7 @@ for (eve in rhofd ){
     # 5) Save
     common_allMax$sim<-NULL
     if (!dir.exists("data")) dir.create("data", recursive = TRUE)
-    saveRDS(common_allMax, "data/common_allMax.rds")
+    #saveRDS(common_allMax, "data/common_allMax.rds")
     
     
     
@@ -864,6 +869,8 @@ for (eve in rhofd ){
     saveRDS(SimulatedData,"data/SimulatedData.rds")
     ##END OF SIMULATION
     
+    rm(SimulatedData,common_all,common_allMin,common_allMax,expected_list)
+    gc()
     
   }
   rho_key<-as.character(eve)
@@ -893,7 +900,7 @@ for (eve in rhofd ){
     # 5) Save
     common_all$sim<-NULL
     if (!dir.exists("data")) dir.create("data", recursive = TRUE)
-    saveRDS(common_all, "data/common_allExp.rds")
+    #saveRDS(common_all, "data/common_allExp.rds")
     
     
     
@@ -920,7 +927,7 @@ for (eve in rhofd ){
     common_allMin$sim<-NULL
     # 5) Save
     if (!dir.exists("data")) dir.create("data", recursive = TRUE)
-    saveRDS(common_allMin, "data/common_allMin.rds")
+    #saveRDS(common_allMin, "data/common_allMin.rds")
     
     
     
@@ -948,7 +955,7 @@ for (eve in rhofd ){
     # 5) Save
     common_allMax$sim<-NULL
     if (!dir.exists("data")) dir.create("data", recursive = TRUE)
-    saveRDS(common_allMax, "data/common_allMax.rds")
+    #saveRDS(common_allMax, "data/common_allMax.rds")
     
     
     
@@ -966,6 +973,8 @@ for (eve in rhofd ){
     #SimulatedData$rho<-rho_key
     saveRDS(SimulatedData,gh)
     ##END OF SIMULATION
+    rm(SimulatedData,common_all,common_allMin,common_allMax,expected_list)
+    gc()
     
   }
   
@@ -1020,11 +1029,18 @@ AllRhoCombined <- dplyr::bind_rows(SimList)
 
 # 3. Save the merged dataset
 saveRDS(AllRhoCombined, "data/AllRhoCombined.rds")
-
+# Export to CSV
+#write.csv(AllRhoCombined, "data/AllRhoCombined.csv", row.names = FALSE)
+#write_csv(AllRhoCombined, "data/AllRhoCombined.csv")
+#write.xlsx(AllRhoCombined, 
+           #file = "data/AllRhoCombined.xlsx", 
+           #overwrite = TRUE)
 # optional: check counts
 table(AllRhoCombined$rho,AllRhoCombined$n)
 names(AllRhoCombined)
 
+rm(AllRhoCombined,SimList)
+gc()
 
 ##Test some collinearity As you adjust.
 
@@ -1059,11 +1075,8 @@ datpre <- subset(dat, P == 0|P==1)
 
 
 
-
-
-
-
-
-
-
+##remove
+rm(SimulatedData,common_all,datpre,dat)
+gc()
+  
 
