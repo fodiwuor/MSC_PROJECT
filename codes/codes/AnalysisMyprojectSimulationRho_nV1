@@ -1,0 +1,286 @@
+## =========================================================
+##  BLOCK 1: Build performance summary from AllRhoCombined
+## =========================================================
+
+rm(list = ls(all.names = TRUE), envir = .GlobalEnv)
+#rm(list = ls(all.names = TRUE), envir = .GlobalEnv)
+## --- Packages ---
+if (!requireNamespace("MASS", quietly = TRUE))      install.packages("MASS")
+if (!requireNamespace("dplyr", quietly = TRUE))     install.packages("dplyr")
+if (!requireNamespace("sandwich", quietly = TRUE))  install.packages("sandwich")
+if (!requireNamespace("lmtest", quietly = TRUE))    install.packages("lmtest")
+if (!requireNamespace("purrr", quietly = TRUE))     install.packages("purrr")
+if (!requireNamespace("ggplot2", quietly = TRUE))   install.packages("ggplot2")
+
+library(MASS)
+library(dplyr)
+library(sandwich)
+library(lmtest)
+library(purrr)
+library(ggplot2)
+
+## --- (Optional) Source your own bias/power helpers here ---
+## source("R/perf_functions.R")  # e.g. bias(), power_fun(), coverage_fun(), etc.
+
+## --- 1. Load your big simulated data set ---
+
+## OPTION A: from RDS (if you saved it like before)
+AllRhoCombined <- readRDS("data/AllRhoCombined.rds")
+
+## OPTION B: from CSV (uncomment if you’re using a .csv)
+# AllRhoCombined <- read.csv("data/AllRhoCombined.csv")
+
+str(AllRhoCombined)
+
+## --- 2. Make sure EstimandScenario is a labelled factor ---
+
+AllRhoCombined <- AllRhoCombined %>%
+  mutate(
+    EstimandScenario = factor(
+      EstimandScenario,
+      levels = c(1, 2, 3),
+      labels = c("Expected", "minimum", "Maximum")
+    )
+  )
+
+## --- 3. True policy effects for each scenario (on log scale) ---
+## These are the B2 values you gave:
+## small  = -0.0408
+## medium = -0.3567
+## large  = -0.5108
+
+true_B_fun <- function(scen) {
+  dplyr::case_when(
+    scen == "minimum"  ~ -0.0408,  # small
+    scen == "Expected" ~ -0.3567,  # moderate
+    scen == "Maximum"  ~ -0.5108,  # large
+    TRUE               ~ NA_real_
+  )
+}
+
+## --- 4. Function to fit one simulation for a given method ---
+
+delta  <- 1e-4                          # avoid log(0)
+fam_nb <- MASS::negative.binomial(350)  # same dispersion as simulation
+
+fit_one_sim <- function(dat, method = c("Trd", "CITS")) {
+  method <- match.arg(method)
+  L <- floor(nrow(dat)^(1/4))   # HAC lag as in your code
+  
+  ## Fit model with basic error protection, track convergence
+  fit <- tryCatch(
+    {
+      if (method == "CITS") {
+        ## CITS: Y ~ P + offset(log(Z))
+        glm(Y ~ P + offset(log(Z + delta)),
+            family = fam_nb, data = dat)
+      } else {
+        ## Traditional regression: Y ~ t + P + X1
+        glm(Y ~ t + P + X1,
+            family = fam_nb, data = dat)
+      }
+    },
+    error = function(e) NULL
+  )
+  
+  if (is.null(fit)) {
+    ## model failed to fit
+    return(list(
+      estimate  = NA_real_,
+      se        = NA_real_,
+      p         = NA_real_,
+      converged = FALSE
+    ))
+  }
+  
+  conv_flag <- isTRUE(fit$converged)
+  
+  if (!conv_flag) {
+    ## no HAC etc. if not converged
+    return(list(
+      estimate  = NA_real_,
+      se        = NA_real_,
+      p         = NA_real_,
+      converged = FALSE
+    ))
+  }
+  
+  ## Newey–West HAC variance and inference, safely
+  out <- tryCatch(
+    {
+      V <- sandwich::NeweyWest(fit, lag = L, prewhite = FALSE, adjust = TRUE)
+      
+      est <- coef(fit)["P"]
+      se  <- sqrt(diag(V)["P"])
+      z   <- est / se
+      p   <- 2 * pnorm(-abs(z))
+      
+      list(
+        estimate  = est,
+        se        = se,
+        p         = p,
+        converged = TRUE
+      )
+    },
+    error = function(e) {
+      ## glm estimated P, but HAC variance failed
+      est <- coef(fit)["P"]
+      list(
+        estimate  = est,        # keep the point estimate
+        se        = NA_real_,   # no valid HAC SE
+        p         = NA_real_,   # so no valid p-value
+        converged = FALSE       # mark as non-converged for perf summaries
+      )
+    }
+  )
+  
+  out
+}
+
+## --- 5. Get simulation–level results for every (rho, n, scenario, j, method) ---
+
+estimates <- AllRhoCombined %>%
+  arrange(rho, n, EstimandScenario, j, t) %>%
+  group_by(rho, n, EstimandScenario, j) %>%
+  group_modify(~{
+    dat   <- .x
+    scen  <- as.character(dat$EstimandScenario[1])
+    theta <- true_B_fun(scen)
+    
+    res_trd  <- fit_one_sim(dat, "Trd")
+    res_cits <- fit_one_sim(dat, "CITS")
+    
+    tibble(
+      Method    = c("Trd",              "CITS"),
+      estimate  = c(res_trd$estimate,   res_cits$estimate),
+      se        = c(res_trd$se,         res_cits$se),
+      pvalue    = c(res_trd$p,          res_cits$p),
+      converged = c(res_trd$converged,  res_cits$converged),
+      true_B    = theta
+    )
+  }) %>%
+  ungroup()
+
+## Quick check:
+dplyr::count(estimates, rho, n, EstimandScenario, Method)
+
+## --- 6. Summarise across simulations (performance table) ---
+
+perf <- estimates %>%
+  group_by(rho, n, EstimandScenario, Method) %>%
+  summarise(
+    ## Total sims and convergence info
+    R_total       = n(),
+    R_converged   = sum(converged),
+    nonconv_rate  = ((R_total - R_converged) / R_total)*100,
+    
+    ## True value (constant within group, restrict to converged if possible)
+    true_val = dplyr::first(true_B[converged %in% TRUE]),
+    
+    ## ---- Bias & its MCSE ----
+    ## If you prefer your own bias() function, you can replace this block by:
+    ##   bias_res <- bias( ... )
+    ##   Bias          = bias_res$Bias
+    ##   Bias_percent  = bias_res$Bias_percent
+    ##
+    Bias = if (R_converged > 0) {
+      #mean(estimate[converged] - true_B[converged])
+      round(mean(estimate[converged]) - dplyr::first(true_B[converged]),4)
+    } else {
+      NA_real_
+    },
+    MCSE_Bias = if (R_converged > 1) {
+      est  <- estimate[converged]          # θ̂_i
+      mhat <- mean(est)                    # \bar{θ̂}
+      round(sqrt( sum((est - mhat)^2) / (R_converged * (R_converged - 1)) ),4)
+    } else {
+      NA_real_
+    }
+    ,
+    Bias_percent = if (!is.na(true_val) && true_val != 0 && R_converged > 0) {
+      round(100 * abs(Bias / true_val),2)
+    } else {
+      NA_real_
+    },
+    #MCSE_Bias_percent = if (!is.na(true_val) && true_val != 0 && R_converged > 1) {
+      #rel_bias_i <- (estimate[converged] - true_B[converged]) / true_val
+      #100 * sd(rel_bias_i) / sqrt(R_converged)
+    #} else {
+      #NA_real_
+    #},
+    
+    ## ---- MSE & its MCSE ----
+    MSE_estimate = if (R_converged > 0) {
+      round(mean((estimate[converged] - true_B[converged])^2),4)
+    } else {
+      NA_real_
+    },
+    MCSE_MSE = if (R_converged > 1) {
+      sq_err <- (estimate[converged] - true_B[converged])^2  # X_i
+      m      <- mean(sq_err)                                 # MSE = mean(X_i)
+      round(sqrt( sum((sq_err - m)^2) / (R_converged * (R_converged - 1)) ),4)
+    } else {
+      NA_real_
+    },
+    
+    ## ---- Coverage & MCSE (95% Wald CI) ----
+    coverage = if (R_converged > 0) {
+      mean(
+        (estimate[converged] - 1.96 * se[converged]) <= true_B[converged] &
+          true_B[converged] <= (estimate[converged] + 1.96 * se[converged])
+      )
+    } else {
+      NA_real_
+    },
+    MCSE_coverage = if (R_converged > 0 && !is.na(coverage)) {
+      sqrt(coverage * (1 - coverage) / R_converged)
+    } else {
+      NA_real_
+    },
+    
+    ## ---- Power & MCSE (H0: no effect) ----
+    ## If you have your own power() function, you can replace this block.
+    power = if (R_converged > 0) {
+      mean(pvalue[converged] <= 0.05)
+    } else {
+      NA_real_
+    },
+    MCSE_power = if (R_converged > 0 && !is.na(power)) {
+      sqrt(power * (1 - power) / R_converged)
+    } else {
+      NA_real_
+    },
+    
+    ## ---- Empirical vs model-based SE ----
+    Empirical_SE      = if (R_converged > 1) sd(estimate[converged]) else NA_real_,
+    avg_model_SE      = if (R_converged > 0) mean(se[converged])    else NA_real_,
+    ratio_Emp_ModelSE = if (!is.na(Empirical_SE) && !is.na(avg_model_SE) && avg_model_SE > 0) {
+      Empirical_SE / avg_model_SE
+    } else {
+      NA_real_
+    },
+    
+    .groups = "drop"
+  ) %>%
+  mutate(
+    power_pct        = round(100 * power,2),
+    MCSE_power_pct   = round(100 * MCSE_power,4),
+    coverage_pct     = round(100 * coverage,2),
+    MCSE_cov_pct     = round(100 * MCSE_coverage,4)
+  )
+
+## Look at the first rows
+head(perf)
+
+## --- 7. Save simulation-level estimates and performance summary ---
+
+if (!dir.exists("data")) dir.create("data", recursive = TRUE)
+
+## Store estimates and their SEs (per-sim, per-method)
+saveRDS(estimates, "data/sim_estimates.rds")
+write.csv(estimates, "data/sim_estimates.csv", row.names = FALSE)
+
+## Store performance summary
+saveRDS(perf, "data/performance_summary.rds")
+write.csv(perf, "data/performance_summary.csv", row.names = FALSE)
+
