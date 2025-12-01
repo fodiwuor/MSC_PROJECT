@@ -65,10 +65,13 @@ for (rof in rhofd) {
   }
   for(jojog in nseries){
     n<-jojog
-    ##resetting seed to 0.4
+    ##resetting seed to 0.4 rho jojog
     if(rof==0.4 & n==averaging_n){
       set.seed(seed)
     }
+    
+    cat("corelation", rof,"of dataset",jojog,"(","18 diferent series lengths",")","\n")
+    #cat("Length of series is", jojog, "\n")
     
     #rho<-rof
     oyaoya<-1
@@ -85,7 +88,7 @@ for (rof in rhofd) {
       
       
       for (i in 1:nsim){
-        print(paste("simulating dataset",i,"Level change",B2,sep=""))
+        #print(paste("simulating dataset",i,"Level change",B2,sep=""))
         
         ##Cofficient Z
         b0<-vcoeffsZ[1]
@@ -132,15 +135,15 @@ for (rof in rhofd) {
         #}#Print the slope being used
         
         if (zslopPercent<=0){
-          print(mildparalleZ_Vf)
-          print(StrongparalleZ_Vf)
-          print(StrongerparalleZ_Vf)
-          print(StrongerparalleZ_VfInc)
+          #print(mildparalleZ_Vf)
+          #print(StrongparalleZ_Vf)
+          #print(StrongerparalleZ_Vf)
+          #print(StrongerparalleZ_VfInc)
         }else{
-          print(mildparalleZ_Vp)
-          print(StrongparalleZ_Vp)
-          print(StrongerparalleZ_Vp)
-          print(StrongerparalleZ_Vp_zfaster)
+          #print(mildparalleZ_Vp)
+          #print(StrongparalleZ_Vp)
+          #print(StrongerparalleZ_Vp)
+          #print(StrongerparalleZ_Vp_zfaster)
         }
         
         
@@ -156,14 +159,14 @@ for (rof in rhofd) {
           t0<- floor((T/2)+0.5) 
         }
         
-        print(t0)
+        #print(t0)
         
         P  <- as.integer(t >= t0)     # policy step at t=25
         #N  <- rep(1000, T)            # exposure (can vary if you want)
         
         ##letting confounder have level drop 3 step early around policy
         tq<-t0-lagtq
-        print(tq)
+        #print(tq)
         
         #seasonalX<-c(log(1.04),log(0.98),log(1.04),log(1.01)) #Just picked berneal et al to inform this seasonality component
         Season<-seasonalX[1]*sin((2*pi*t*1)/12)+seasonalX[2]*cos((2*pi*t*1)/12)+seasonalX[3]*sin((2*pi*t*2)/12)+seasonalX[4]*cos((2*pi*t*2)/12)
@@ -220,7 +223,7 @@ for (rof in rhofd) {
           X2_scaled <- (X2_raw - mu_pre_obs) / tensX2
           #.Random.seed <- seed_before
         })else{
-          print(" ")
+          #print(" ")
         }
         #.Random.seed <- seed_before
         
@@ -252,7 +255,7 @@ for (rof in rhofd) {
         
         ## Quick checks for (non-)collinearity with policy
         cor_P_X1 <- cor(P, X1)   # should be far from 1
-        print(round(cor_P_X1, 3))
+        #print(round(cor_P_X1, 3))
         
         ## ----- TRUE COEFFICIENTS -----internd to vary B2(-0.36 expected,-0.51 maximum,-0.04 minimal)
         # Outcome Y (your estimand is B2)
@@ -622,8 +625,8 @@ for (rof in rhofd) {
     }
     # ---- ADD: tag each data frame with rho and n (minimal, base R only) ----
     # ---- ADD: tag each data frame with rho and n (robust to transform() scoping) ----
-    cat("corelation is", rof, "\n")
-    cat("Length of series is", jojog, "\n")
+    #cat("corelation is", rof, "\n")
+    #cat("Length of series is", jojog, "\n")
     
     rho_tag <- as.character(rof)
     n_tag   <- as.integer(jojog)
@@ -638,26 +641,21 @@ for (rof in rhofd) {
     sim_listcommonBO_Expected <- lapply(sim_listcommonBO_Expected, add_tags)
     sim_listcommonBO_MaxEf    <- lapply(sim_listcommonBO_MaxEf,    add_tags)
     
-    
-    
-    assign(
-      paste0("sim_listcommonBO_", rof,"_",jojog),
-      list(
-        sim_listcommonBO_MinEf= sim_listcommonBO_MinEf,
-        sim_listcommonBO_Expected= sim_listcommonBO_Expected,
-        sim_listcommonBO_MaxEf= sim_listcommonBO_MaxEf
-      ),
-      envir = .GlobalEnv
+    res[[paste0(as.character(rof), "_", jojog)]] <- list(
+      sim_listcommonBO_MinEf    = sim_listcommonBO_MinEf,
+      sim_listcommonBO_Expected = sim_listcommonBO_Expected,
+      sim_listcommonBO_MaxEf    = sim_listcommonBO_MaxEf
     )
-    # keep your existing assign(...) here
-    #res[[as.character(rof)]] <- get(paste0("sim_listcommonBO_", rof,"_",jojog), envir = .GlobalEnv)
-    res[[paste0(as.character(rof), "_", jojog)]] <- get(paste0("sim_listcommonBO_", rof,"_",jojog), envir = .GlobalEnv)
     
     #list(sim_listcommonBO_MinEf=sim_listcommonBO_MinEf, sim_listcommonBO_Expected=sim_listcommonBO_Expected,sim_listcommonBO_MaxEf=sim_listcommonBO_MaxEf)
+    ##Print rho and n here rho jojog
+    #garbe collection
+    rm(sim_listcommonBO_MinEf,sim_listcommonBO_Expected,sim_listcommonBO_MaxEf)
+    tmp_gc <- gc()
+  print(tmp_gc)
+  rm(tmp_gc)
   }
-  
   }
-
 return(res)
 
   ##end function
@@ -682,8 +680,13 @@ o_false <- fredSiProject(
 )
 
 ## Pull the correct object created by your assign():
-obj_name <- paste0("sim_listcommonBO_", rho_key, "_", n_key)
-f0_list  <- get(obj_name)$sim_listcommonBO_Expected
+#obj_name <- paste0("sim_listcommonBO_", rho_key, "_", n_key)
+#f0_list  <- get(obj_name)$sim_listcommonBO_Expected
+
+obj_key <- paste0(rho_key, "_", n_key)   # e.g. "0.4_150"
+
+f0_list <- o_false[[obj_key]]$sim_listcommonBO_Expected
+
 
 ## Bind and keep only what we’ll compare
 f0 <- dplyr::bind_rows(f0_list, .id = "sim") |>
@@ -698,7 +701,11 @@ o_true <- fredSiProject(
 )
 
 ## Grab the same rho/n block again (now from the genX2=TRUE run)
-f1_list <- get(obj_name)$sim_listcommonBO_Expected
+obj_key <- paste0(rho_key, "_", n_key)   # e.g. "0.4_150"
+
+f1_list <-o_true[[obj_key]]$sim_listcommonBO_Expected
+
+#f1_list <- get(obj_name)$sim_listcommonBO_Expected
 f1 <- dplyr::bind_rows(f1_list, .id = "sim") |>
   arrange(as.integer(sim), t) |>
   select(sim, j, t, Y)
@@ -755,17 +762,19 @@ identical(VA$ZmildparaV, VB$ZmildparaV)  # expect FALSE
 
 rm(outA,outB,A,B,VA,VB)
 gc()
+##remove
+#rm(list = ls())
 ##RUN MAIN simulation(nsim,seasonalX,vcoeffsY,vcoeffsZ,rhofd, sigma2fd,n,u_s=0,genX2=TRUE,zslopPercent=5,PincZsl=5,prop_MedX2=0.2,tensX2=1000,meanpreX2=2000,seed=123){ ##Let var be 3 times the mean. mean to variance ration for choosing overdispersion.Chose mean to var ratio of 2;mean=B0
 #setting seed
-#averaging_n=150,you can set averaging n to any values for which you want to preent results if results are so many
-out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,rhofd,Rhosingle=0.4,SingleRho=FALSE,0.1,n,u_s =1,genX2=TRUE,zslopPercent=10,PincZsl=10,averaging_n=150)
+#averaging_n=150,you can set averaging n to any values for which you want to preent results if results are so many:I will do 7000 but let me test with 200
+out <-fredSiProject(8688,seasonalX,vcoeffsY,vcoeffsZ,rhofd,Rhosingle=0.4,SingleRho=FALSE,0.1,n,u_s =1,genX2=TRUE,zslopPercent=10,PincZsl=10,averaging_n=150)
 names(out)
 #out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =0)
 #names(out)
 #d1_common   <- out$common[[1]]
 #d1_uncommon <- out$uncommon[[1]]
 ##Bind all shared confounder simulation
-library(dplyr)
+#library(dplyr)
 
 #rho_key <- "0.4"  # choose the rho you want
 n_key <- "150" 
@@ -773,6 +782,7 @@ n_key <- "150"
 for (eve in rhofd ){
   #foget<-as.character(eve)
   if (eve==0.4){
+    n_key <- "150" 
     rho_key<-as.character(eve)
     obj_name<- paste0(rho_key, "_", n_key)
     # 1) Grab ONLY the Expected sims for rho = 0.4
@@ -894,7 +904,7 @@ for (eve in rhofd ){
       mutate(
         tce = t - t0,
         Policy_Time = tce * P,
-        EstimandScenario =1
+        EstimandScenario =2
       )
     
     # 5) Save
@@ -922,7 +932,7 @@ for (eve in rhofd ){
       mutate(
         tce = t - t0,
         Policy_Time = tce * P,
-        EstimandScenario =2
+        EstimandScenario =1
       )
     common_allMin$sim<-NULL
     # 5) Save
@@ -966,14 +976,14 @@ for (eve in rhofd ){
     SimulatedData<-rbind(common_all,common_allMin, common_allMax)
     SimulatedData$EstimandScenario<-factor(SimulatedData$EstimandScenario,
                                            levels = c(1, 2, 3),
-                                           labels = c("Expected", "minimum", "Maximum"))
+                                           labels = c("Small","Moderate","Large"))
     #Save dataset.
     gh<-paste("data/SimulatedData",obj_name,".rds",sep="")
     #SimulatedData$rho<-NULL
     #SimulatedData$rho<-rho_key
     saveRDS(SimulatedData,gh)
     ##END OF SIMULATION
-    rm(SimulatedData,common_all,common_allMin,common_allMax,expected_list)
+    rm(SimulatedData,common_all,common_allMin,common_allMax,expected_list,gh)
     gc()
     
   }
@@ -981,6 +991,9 @@ for (eve in rhofd ){
   
 } 
 
+##free the memory
+rm(out)
+gc()
 
 
 ##Checking missing files
@@ -1076,7 +1089,7 @@ datpre <- subset(dat, P == 0|P==1)
 
 
 ##remove
-rm(SimulatedData,common_all,datpre,dat)
+rm(common_all,datpre,dat)
 gc()
   
 
