@@ -871,7 +871,7 @@ gc()
 #setting seed
 #averaging_n=150,you can set averaging n to any values for which you want to preent results if results are so many:I will do 7000 but let me test with 200
 #8688
-out <-fredSiProject(20,seasonalX,vcoeffsY,vcoeffsZ,rhofd,Rhosingle=0.4,SingleRho=FALSE,0.1,n,u_s =1,genX2=TRUE,zslopPercent=10,PincZsl=10,averaging_n=150,shared_conf =0.85)
+out <-fredSiProject(8688,seasonalX,vcoeffsY,vcoeffsZ,rhofd,Rhosingle=0.4,SingleRho=FALSE,0.1,n,u_s =1,genX2=TRUE,zslopPercent=10,PincZsl=10,averaging_n=150,shared_conf =0.85)
 names(out)
 #out <-fredSiProject(7000,seasonalX,vcoeffsY,vcoeffsZ,0.4,0.1,150,u_s =0)
 #names(out)
@@ -1217,4 +1217,5 @@ datpre <- subset(dat, P == 0|P==1)
 rm(common_all,datpre,dat)
 gc()
   
+
 
