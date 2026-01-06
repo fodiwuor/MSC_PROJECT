@@ -255,7 +255,7 @@ server <- function(input, output, session) {
     cols <- switch(
       which,
       "Point estimate"      = c(base,"Policy effect (Empirical SE)","Estimand"),
-      "Bias"                = c(base,"Bias (MCSE)"),
+      "Bias"                = c(base,"Percent Bias","Bias (MCSE)"),
       "Coverage"            = c(base,"Coverage 95% (MCSE)"),
       "Power"               = c(base,"Power (MCSE)"),
       "MSE"                 = c(base,"Mean square error (MCSE)"),
