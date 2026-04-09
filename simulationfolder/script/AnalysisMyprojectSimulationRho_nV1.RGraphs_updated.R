@@ -1,6 +1,7 @@
 
 #packages
 library(dplyr)
+library(cowplot)
 library(patchwork)
 #library(ggplot2)
 library(grid)
@@ -13,6 +14,8 @@ library(ggridges)
 ##reading data
 perf<-readRDS("data/performance_summary.rds")
 str(perf)
+
+#perf<-filter(perf,Method!="CITS_spill_3pct")
 ##creating a table of performance measures to be used in R_shinydashbord
 perfRshiny <- perf %>%
   mutate(
@@ -26,10 +29,10 @@ perfRshiny <- perf %>%
     Method = case_when(
       Method == "CITS_0.4_constant" ~ "Controlled interrupted time series(CITS,ρ = 0.4)",
       Method == "Trd"               ~ "Multivariable negative binomial regression(Trd)",
+      Method == "CITS_spill_3pct"               ~ "Controlled interrupted time series (Contaminated control)",
       TRUE                          ~ "Controlled interrupted time series(CITS)"
     )
-  ) %>%
-  select(
+  ) %>%dplyr::select(
     rho, n, EstimandScenario, Method,
     `Policy effect (Empirical SE)`,
     `Bias (MCSE)`,
@@ -40,6 +43,10 @@ perfRshiny <- perf %>%
     true_val,
     `Percent Bias`
   )
+
+table(perfRshiny$Method,useNA ="ifany")
+perfRshiny<-perfRshiny%>%filter(Method!="Controlled interrupted time series (Contaminated control)")
+
 
 
 write.csv(perfRshiny,
@@ -68,7 +75,7 @@ perf_plot <- perf %>%
     },
     
     Method = if (!is.factor(Method)) {
-      factor(Method, levels = c("Trd", "CITS","CITS_0.4_constant"))
+      factor(Method, levels = c("Trd", "CITS","CITS_0.4_constant","CITS_spill_3pct"))
     } else {
       Method
     },
@@ -128,7 +135,7 @@ geom_line(aes(y = avg_model_SE, colour = "Model-based SE"), linetype = "dashed")
     panel.grid.minor = element_blank()
   )
 
-p_trd2
+p3<-p_trd2
 
 ggsave(
   filename = "graphs/p_trd_SE_traditional.png",
@@ -177,10 +184,11 @@ geom_line(aes(y = avg_model_SE, colour = "Model-based SE"),
   theme_bw() +
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank()
+    panel.grid.minor = element_blank(),
+    legend.position = "none"
   )
 
-p_cits2
+p4<-p_cits2
 ggsave(
   filename = "graphs/p_cits_SE.png",
   plot     = p_cits2,
@@ -195,6 +203,47 @@ ggsave(
   width    = 8,
   height   = 4.5,
   device   = cairo_pdf
+)
+
+
+
+combinedstd<- p3 / p4 
+
+#ggsave(
+  #"graphs/SE_both.pdf",
+  #plot = combinedstd,
+  #width = 12,
+  #height = 14,
+  #units = "in",
+  #dpi = 300
+#)
+
+ggsave(
+  filename = "graphs/SE_both.pdf",
+  plot     = combinedstd,
+  width    = 12,
+  height   = 14,
+  units    = "in",
+  device   = cairo_pdf
+)
+
+
+ggsave(
+  filename = "graphs/SE_both.png",
+  plot     = combinedstd,
+  width    = 12,
+  height   = 14,
+  units    = "in",
+  device   = cairo_pdf
+)
+
+ggsave(
+  filename = "graphs/SE_both.png",
+  plot     = combinedstd,
+  width    = 12,
+  height   = 14,
+  units    = "in",
+  dpi      = 300
 )
 
 #CITS with fixed autocorelation(0.4)
@@ -257,7 +306,9 @@ ggsave(
 
 #original scale
 #log scale
-perf_plotcitstrd<-perf_plot[perf_plot$Method!="CITS_0.4_constant",]
+table(perf_plot$Method,useNA ="ifany")
+#perf_plotcitstrd<-perf_plot[perf_plot$Method!="CITS_0.4_constant",]
+perf_plotcitstrd<-perf_plot%>%filter(Method=="Trd"|Method=="CITS")
 p_combined_log2 <- ggplot(
   perf_plotcitstrd,
   aes(x = n, y = Empirical_SE, colour = Method, group = Method)
@@ -266,6 +317,7 @@ p_combined_log2 <- ggplot(
   geom_point(size = 1.5) +
   facet_grid(facet_label ~ rho_f) +
   scale_y_log10() +
+  scale_colour_discrete(labels = c(Trd = "Multivariable NB", CITS = "CITS")) +
   labs(
     x = "Length of time series (n)",
     y = "Empirical SE(log scale)",
@@ -276,6 +328,7 @@ p_combined_log2 <- ggplot(
     strip.background = element_rect(fill = "grey95"),
     panel.grid.minor = element_blank()
   )
+
 
 p_combined_log2
 
@@ -301,7 +354,8 @@ ggsave(
 
 ##All cits
 #perf_plotcitstrd<-perf_plot[perf_plot$Method!="CITS_0.4_constant",]
-perf_plot1<-perf_plot%>%mutate(Method = dplyr::case_when(
+perf_plot11<-perf_plot%>%filter(Method!="CITS_spill_3pct")
+perf_plot1<-perf_plot11%>%mutate(Method = dplyr::case_when(
   Method == "CITS_0.4_constant" ~ "CITS (ρ=0.4)",
   Method == "CITS"             ~ "CITS",
   Method == "Trd"              ~ "Trd",
@@ -315,6 +369,7 @@ p_combined_log2 <- ggplot(
   geom_point(size = 1.5) +
   facet_grid(facet_label ~ rho_f) +
   scale_y_log10() +
+  scale_colour_discrete(labels = c(Trd = "Multivariable NB", CITS = "CITS")) +
   labs(
     x = "Length of time series (n)",
     y = "Empirical SE(log scale)",
@@ -381,7 +436,7 @@ p_trd_cova<- perf_plot %>%
     legend.position = "right"
   )
 
-p_trd_cova 
+p5<-p_trd_cova 
 
 ggsave(
   filename = "graphs/p_trd_coverage.png",
@@ -427,10 +482,10 @@ p_trd_cits <- perf_plot %>%
   theme(
     strip.background = element_rect(fill = "grey95"),
     panel.grid.minor = element_blank(),
-    legend.position = "right"
+    legend.position = "none"
   )
 
-p_trd_cits 
+p6<-p_trd_cits 
 
 ggsave(
   filename = "graphs/p_cits_coverage.png",
@@ -450,9 +505,36 @@ ggsave(
 )
 
 
+combinedcova<- p5 / p6 
+
+#ggsave(
+#"graphs/SE_both.pdf",
+#plot = combinedstd,
+#width = 12,
+#height = 14,
+#units = "in",
+#dpi = 300
+#)
+##combine
+ggsave(
+  filename = "graphs/cova_both.pdf",
+  plot     =combinedcova,
+  width    = 12,
+  height   = 14,
+  units    = "in",
+  device   = cairo_pdf
+)
 
 
 
+ggsave(
+  filename = "graphs/cova_both.png",
+  plot     = combinedcova,
+  width    = 12,
+  height   = 14,
+  units    = "in",
+  dpi      = 300
+)
 
 
 
@@ -499,7 +581,7 @@ p_trd_power <- perf_plot %>%
     legend.position = "right"
   )
 
-p_trd_power
+p7<-p_trd_power
 
 ggsave(
   filename = "graphs/p_trd_Power.png",
@@ -551,10 +633,10 @@ p_cits_power <- perf_plot %>%
   theme(
     strip.background = element_rect(fill = "grey95"),
     panel.grid.minor = element_blank(),
-    legend.position = "right"
+    legend.position = "none"
   )
 
-p_cits_power
+p8<-p_cits_power
 
 ggsave(
   filename = "graphs/p_cits_power.png",
@@ -574,6 +656,25 @@ ggsave(
   device=cairo_pdf    # good for publication
 )
 
+combinedpowa<- p7 / p8
+
+ggsave(
+  filename = "graphs/powa_both.pdf",
+  plot     =combinedpowa,
+  width    = 12,
+  height   = 14,
+  units    = "in",
+  device   = cairo_pdf
+)
+
+ggsave(
+  filename = "graphs/powa_both.png",
+  plot     = combinedpowa,
+  width    = 12,
+  height   = 14,
+  units    = "in",
+  dpi      = 300
+)
 
 
 
@@ -608,7 +709,7 @@ p_trd_mse <- perf_plot %>%
     legend.position = "right"
   )
 
-p_trd_mse
+p9<-p_trd_mse
 
 ggsave(
   filename = "graphs/p_trd_mse.png",
@@ -654,10 +755,10 @@ p_cits_mse <- perf_plot %>%
   theme(
     strip.background = element_rect(fill = "grey95"),
     panel.grid.minor = element_blank(),
-    legend.position = "right"
+    legend.position = "none"
   )
 
-p_cits_mse
+p10<-p_cits_mse
 
 ggsave(
   filename = "graphs/p_cits_mse.png",
@@ -676,7 +777,27 @@ ggsave(
   device = cairo_pdf    # good for publication
 )
 
+combinedmse<-p9/p10
 
+
+ggsave(
+  filename = "graphs/mse_both.pdf",
+  plot     =combinedmse,
+  width    = 12,
+  height   = 14,
+  units    = "in",
+  device   = cairo_pdf
+)
+
+
+ggsave(
+  filename = "graphs/mse_both.png",
+  plot     =combinedmse,
+  width    = 12,
+  height   = 14,
+  units    = "in",
+  dpi      = 300
+)
 
 
 ##Plotting point estimates
@@ -700,8 +821,8 @@ est_plot <- estimates %>%
     rho_char = as.character(rho),
     rho_f = factor(
       rho_char,
-      levels = c("0", "0.2", "0.4", "0.6", "0.8"),
-      labels = c("ρ = 0.0", "ρ = 0.2", "ρ = 0.4", "ρ = 0.6", "ρ = 0.8")
+      levels = c("0", "0.2", "0.4", "0.6", "0.8")
+      #labels = c("ρ=0.0", "ρ=0.2", "ρ=0.4", "ρ=0.6", "ρ=0.8")
     ),
     n = if (!is.numeric(n)) as.numeric(as.character(n)) else n
   ) %>%
@@ -725,7 +846,7 @@ selected_n <- c(12, 24, 40, 60, 80, 100)
 est_trd <- est_plot %>%
   filter(Method == "Trd", n %in% selected_n) %>%
   left_join(
-    scenario_labels %>% select(EstimandScenario, facet_label),
+    scenario_labels %>%dplyr::select(EstimandScenario, facet_label),
     by = "EstimandScenario"
   ) %>%
   mutate(
@@ -759,9 +880,18 @@ p_trd_ridge <- ggplot(
   labs(
     title  = "A",
     x      =NULL,
-    y      = "Length of time series (n)",
-    colour = "Autocorrelation (ρ)"
-  ) +
+    y      = "Length of time series (n)"
+    #colour = "Autocorrelation (ρ)"
+  ) +scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  )+
   ggridges::theme_ridges() +
   theme(
     legend.position  = "none",
@@ -774,7 +904,7 @@ p_trd_ridge <- ggplot(
 # + coord_cartesian(xlim = c(-2, 1))
 
 p_trd_ridge
-
+p1<-p_trd_ridge
 ggsave(
   "graphs/Trd_ridgeline_estimates.png",
   p_trd_ridge,
@@ -803,12 +933,12 @@ est_plot <- estimates %>%
     rho_char = as.character(rho),
     rho_f = factor(
       rho_char,
-      levels = c("0", "0.2", "0.4", "0.6", "0.8"),
-      labels = c("ρ = 0.0", "ρ = 0.2", "ρ = 0.4", "ρ = 0.6", "ρ = 0.8")
+      levels = c("0", "0.2", "0.4", "0.6", "0.8")
+      #labels = c("ρ = 0.0", "ρ = 0.2", "ρ = 0.4", "ρ = 0.6", "ρ = 0.8")
     ),
     n = if (!is.numeric(n)) as.numeric(as.character(n)) else n
   ) %>%
-  select(-rho_char)
+  dplyr::select(-rho_char)
 
 ## 2. Scenario labels + true effects (fix facet order here)
 scenario_labels <- est_plot %>%
@@ -828,7 +958,7 @@ selected_n <- c(12, 24, 40, 60, 80, 100)
 est_trd <- est_plot %>%
   filter(Method == "CITS", n %in% selected_n) %>%
   left_join(
-    scenario_labels %>% select(EstimandScenario, facet_label),
+    scenario_labels %>% dplyr::select(EstimandScenario, facet_label),
     by = "EstimandScenario"
   ) %>%
   mutate(
@@ -862,9 +992,18 @@ p_trd_ridge <- ggplot(
   labs(
     title  = "B",
     x      = "Estimated intervention effect (log IRR)",
-    y      = "Length of time series (n)",
-    colour = "Autocorrelation (ρ)"
-  ) +
+    y      = "Length of time series (n)"
+    #colour = "Autocorrelation (ρ)"
+  ) +scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  )+
   ggridges::theme_ridges() +
   theme(
     legend.position  = "bottom",
@@ -877,7 +1016,7 @@ p_trd_ridge <- ggplot(
 # + coord_cartesian(xlim = c(-2, 1))
 
 p_trd_ridge
-
+p2<-p_trd_ridge
 ggsave(
   "graphs/CITS_ridgeline_estimates.png",
   p_trd_ridge,
@@ -894,6 +1033,49 @@ ggsave(
   device   = cairo_pdf
 )
 
+##lets try doing graph combining the ridgeline_plots
+# p1 and p2 are your already-finished plots
+combined <- p1 / p2 
+
+ggsave(
+  "graphs/ridgeline_both.pdf",
+  plot = combined,
+  width = 12,
+  height = 14,
+  units = "in",
+  dpi = 300
+)
+
+ggsave(
+  "graphs/ridgeline_both.png",
+  plot = combined,
+  width = 12,
+  height = 14,
+  units = "in",
+  dpi = 300
+)
+
+
+combined2 <- plot_grid(
+  p1, p2,
+  ncol = 1,
+  labels = c("A", "B"),
+  label_size = 14,
+  align = "v"
+)
+
+ggsave(
+  "ridgeline_bothCow.pdf",
+  plot = combined2,
+  width = 12,
+  height = 14,
+  units = "in",
+  dpi = 300
+)
+
+
+
+
 #CITS with autocorelation fixe at 0.4
 table(est_plot$Method)
 est_plot1<-est_plot%>%mutate(Method = case_when(
@@ -906,7 +1088,7 @@ table(est_plot1$Method)
 est_trd <- est_plot1 %>%
   filter(Method == "CITS(ρ= 0.4)", n %in% selected_n) %>%
   left_join(
-    scenario_labels %>% select(EstimandScenario, facet_label),
+    scenario_labels %>%dplyr::select(EstimandScenario, facet_label),
     by = "EstimandScenario"
   ) %>%
   mutate(
@@ -1007,7 +1189,7 @@ p_trd_bias <- perf_plot %>%
     legend.position = "right"
   )
 
-p_trd_bias 
+p12<-p_trd_bias 
 
 ggsave(
   filename = "graphs/p_trd_bias.png",
@@ -1053,10 +1235,10 @@ p_cits_bias <- perf_plot %>%
   theme(
     strip.background = element_rect(fill = "grey95"),
     panel.grid.minor = element_blank(),
-    legend.position = "right"
+    legend.position = "none"
   )
 
-p_cits_bias 
+p13<-p_cits_bias 
 
 ggsave(
   filename = "graphs/p_cits_bias.png",
@@ -1101,10 +1283,10 @@ p_cits_bias <- perf_plot %>%
   theme(
     strip.background = element_rect(fill = "grey95"),
     panel.grid.minor = element_blank(),
-    legend.position = "right"
+    legend.position = "none"
   )
 
-p_cits_bias 
+p14<-p_cits_bias 
 
 ggsave(
   filename = "graphs/p_citsrho0.4_bias.png",
@@ -1123,11 +1305,32 @@ ggsave(
 )
 
 
+#combine
+combinedBiased<- p12 / p13 / p14
+
+ggsave(
+  "graphs/combinedBIAS_plots.pdf",
+  plot   = combinedBiased,
+  width  = 12,
+  height = 14,
+  units  = "in",
+  device = cairo_pdf
+)
+
+ggsave(
+  "graphs/combinedBIAS_plots.png",
+  plot   = combinedBiased,
+  width  = 12,
+  height = 14,
+  units  = "in",
+  dpi    = 300
+)
 
 
 
 ##lets create some table 
 ns_to_show<-c(c(12,14,16,18,20,24,28,32,36,40,44,48,52,56,60,80,100,150))
+perf<-perf%>%filter(Method!="CITS_spill_3pct")
 perf_clean <- perf %>%
   mutate(
     EstimandScenario = if (!is.factor(EstimandScenario)) {
@@ -1175,7 +1378,7 @@ mutate(
     col_key = paste0(effect_label, "_rho", rho)
   ) %>%
   
-  select(n, Method, col_key, cell) %>%
+  dplyr::select(n, Method, col_key, cell) %>%
   distinct() %>%                      # just in case
   
   pivot_wider(
@@ -1255,7 +1458,7 @@ mutate(
     col_key = paste0(effect_label, "_rho", rho)
   ) %>%
   
-  select(n, Method, col_key, cell) %>%
+  dplyr::select(n, Method, col_key, cell) %>%
   distinct() %>%                      # just in case
   
   pivot_wider(
@@ -1335,7 +1538,7 @@ mutate(
     col_key = paste0(effect_label, "_rho", rho)
   ) %>%
   
-  select(n, Method, col_key, cell) %>%
+  dplyr::select(n, Method, col_key, cell) %>%
   distinct() %>%
   pivot_wider(
     names_from  = col_key,
@@ -1418,7 +1621,7 @@ mutate(
     col_key = paste0(effect_label, "_rho", rho)
   ) %>%
   
-  select(n, Method, col_key, cell) %>%
+  dplyr::select(n, Method, col_key, cell) %>%
   distinct() %>%                      # just in case
   
   pivot_wider(
@@ -1499,7 +1702,7 @@ mutate(
     col_key = paste0(effect_label, "_rho", rho)
   ) %>%
   
-  select(n, Method, col_key, cell) %>%
+  dplyr::select(n, Method, col_key, cell) %>%
   distinct() %>%                      # just in case
   
   pivot_wider(
@@ -1578,7 +1781,7 @@ mutate(
     col_key = paste0(effect_label, "_rho", rho)
   ) %>%
   
-  select(n, Method, col_key, cell) %>%
+  dplyr::select(n, Method, col_key, cell) %>%
   distinct() %>%                      # just in case
   
   pivot_wider(
