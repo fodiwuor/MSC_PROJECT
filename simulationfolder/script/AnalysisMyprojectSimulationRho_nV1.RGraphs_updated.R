@@ -12,7 +12,8 @@ if (!requireNamespace("ggridges", quietly = TRUE)) {
 }
 library(ggridges)
 ##reading data
-perf<-readRDS("data/performance_summary.rds")
+#perf<-readRDS("data/performance_summary.rds")
+perf <- read.csv("data/performance_summary.csv")
 str(perf)
 
 #perf<-filter(perf,Method!="CITS_spill_3pct")
@@ -802,8 +803,9 @@ ggsave(
 
 ##Plotting point estimates
 ## If you saved estimates earlier:
-## 1. Base data (what you already have)
-estimates <- readRDS("data/sim_estimates.rds")
+## 1. Base data (what you already have) write.csv(perf, file = "data/perf.csv", row.names = FALSE)
+#estimates <- readRDS("data/sim_estimates.rds")
+estimates<- read.csv("data/sim_estimates.csv")
 ##Check som summaries
 mean(estimates$estimate[estimates$rho==0.8 & estimates$n==100 & estimates$EstimandScenario=="Large"])
 
