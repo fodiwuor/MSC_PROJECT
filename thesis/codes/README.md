@@ -1,4 +1,4 @@
-Find the R scripts used in the paper here.The scripts are run in the following order:
+Find the R scripts used in the paper/thesis here.The scripts are run in the following order:
 
 (1) Pure_SimulationV2_updated.R generates the simulated dataset AllRhoCombined_diffAR_ZvsY.rds, which is very large and therefore not included in the data folder.
 
