@@ -8,4 +8,5 @@ Find the R scripts used in the paper here.The scripts are run in the following o
 
 NB:In addition there is a script "Pure_SimulationV2SEstimatingNsim100Simulations" used to determine the number simulation runs needed in this study. Codes 1 to 3 are for objetive 1 and 2 of the study.
 
-4 For objective 2 the code used is Objective3Application_Analysis.
+
+(4) For objective 3 the code used is Objective3Application_Analysis.R
