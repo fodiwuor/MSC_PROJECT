@@ -251,8 +251,9 @@ AdmissionIncUpdated_Final<-AdmissionIncUpdated_Final%>%arrange(.imp,yoa,admissio
 
 ##checking if control is nice(My control real seem to be working.See unaffected by policy and meeting common trend assumption)
 ## Pre-policy data (You can use any of the imputed datasets)
+##common trend assumption test
 df_pre <- AdmissionIncUpdated_Final %>%
-  filter(Policy_Indicator == 0, .imp == 2)
+  filter(Policy_Indicator == 0, .imp ==2)
 
 m_nb <- MASS::glm.nb(
   deathsunder1 ~ time + month_dummy + offset(log(deaths5to14)),
@@ -290,41 +291,71 @@ common_trend_table <- data.frame(
 
 common_trend_table
 ##Is my control affected by the policy;You Can any of th imputed dataset
-dt<-AdmissionIncUpdated_Final[AdmissionIncUpdated_Final$.imp==2,]
+##check both the immediate impact and change in trend
+dt<-AdmissionIncUpdated_Final[AdmissionIncUpdated_Final$.imp==1,]
 
 n <- nrow(dt)
 L <- floor(n^(1/4))
 
 
 m_ctrl <- MASS::glm.nb(
-  deaths5to14 ~ time+ Policy_Indicator+ month_dummy,
+  deaths5to14 ~ time+Post_Interraction+ Policy_Indicator+ month_dummy+offset(log(PersonMonth5to14_All)),
   data =dt
 )
+summary(m_ctrl)
 
 
-## Newey–West variance–covariance matrix
+## Coefficients of interest
+
+
+# IMPORTANT: Recalculate HAC covariance matrix
 V_hac <- sandwich::NeweyWest(
   m_ctrl,
   lag = L,
   prewhite = FALSE,
   adjust = TRUE
 )
+terms <- c("Policy_Indicator", "Post_Interraction")
 
+## Extract coefficients and HAC standard errors
+beta <- coef(m_ctrl)[terms]
+se   <- sqrt(diag(V_hac))[terms]
 
-## ---- Bottomley-style Wald test ----
-beta_time <- coef(m_ctrl)["Policy_Indicator"]
-se_time   <- sqrt(diag(V_hac))["Policy_Indicator"]
+## Wald statistics and p-values
+z <- beta / se
+p <- 2 * (1 - pnorm(abs(z)))
 
-z_time <- beta_time / se_time
-p_time <- 2 * (1 - pnorm(abs(z_time)))
+## IRRs and 95% confidence intervals
+results_control <- data.frame(
+  Effect = c(
+    "Immediate level change",
+    "Change in post-intervention trend"
+  ),
+  IRR = exp(beta),
+  lower = exp(beta - 1.96 * se),
+  upper = exp(beta + 1.96 * se),
+  p_value = p
+)
 
-## Results
-beta_time
-se_time
-z_time
-p_time
+## Format results
+results_control <- results_control %>%
+  mutate(
+    IRR = sprintf("%.2f", IRR),
+    `95% CI` = paste0(
+      sprintf("%.2f", lower),
+      "–",
+      sprintf("%.2f", upper)
+    ),
+    `p-value` = sprintf("%.3f", p_value)
+  ) %>%
+  dplyr::select(
+    Effect,
+    IRR,
+    `95% CI`,
+    `p-value`
+  )
 
-
+results_control
 
 
 
@@ -371,7 +402,7 @@ p_time
     ##Linda mama was from April 2017
 AdmissionIncUpdated_Final<-AdmissionIncUpdated_Final%>%mutate(LindaMama=case_when(yoa>2017|(yoa==2017 & admission_month>=4)~1,TRUE~0))
 
-    dtana<-AdmissionIncUpdated_Final[AdmissionIncUpdated_Final$.imp==2,]   
+    dtana<-AdmissionIncUpdated_Final[AdmissionIncUpdated_Final$.imp==3,]
     
     write.csv(
       dtana,
@@ -1387,6 +1418,41 @@ policy_effect_tableCITS
 
 ##Variables for multivariable before using likelihood ratio test
 #Health_WorkerStrike+HIV_Incidence+Malaria_Incidence+neonatal_sepsis_Incidence+birth_defects_Incidence+yoa+month_dummy;Am tempted to try inluding LBW incidence;INCIDENCE OF LOW BIRTH WAIT MAKE irr=1.203 exclude it kabisa
+
+
+#Checking overdispersion
+library(performance)
+##lets fit a poisson to asses the overdispersion
+# Poisson multivariable model
+
+# Overdispersion test
+
+#dispersion ratio =   2.265
+#Pearson's Chi-Squared = 192.549
+                #p-value = < 0.001
+
+#Overdispersion detected.
+
+m_pois <- glm(
+  deathsunder1 ~ Policy_Indicator +
+    Health_WorkerStrike +
+    HIV_Incidence +
+    Malaria_Incidence +
+    neonatal_sepsis_Incidence +
+    birth_defects_Incidence +
+    yoa +
+    month_dummy +
+    offset(log(person_Month_under1)),
+  family = poisson(link = "log"),
+  data = dtana
+)
+
+check_overdispersion(m_pois)
+
+
+
+##fit negative binomial as we have overdispersion
+
 m_nb<- MASS::glm.nb(
   deathsunder1 ~Policy_Indicator+Health_WorkerStrike+HIV_Incidence+Malaria_Incidence+neonatal_sepsis_Incidence+birth_defects_Incidence+yoa+month_dummy+ offset(log(person_Month_under1)),
   data =dtana
@@ -1422,7 +1488,267 @@ policy_effect_tableCITS<- data.frame(
 
 policy_effect_tableCITS
 
+
+summary(m_nb)
+##lets build full model for appendix
+
+
+
+library(dplyr)
+library(stringr)
+library(sandwich)
+library(knitr)
+library(kableExtra)
+
+#--------------------------------------------------
+# 1. Newey-West HAC variance-covariance matrix
+#--------------------------------------------------
+
+n <- nobs(m_nb)
+L <- floor(n^(1/4))
+
+V_hac <- sandwich::NeweyWest(
+  m_nb,
+  lag = L,
+  prewhite = FALSE,
+  adjust = TRUE
+)
+
+#--------------------------------------------------
+# 2. Extract coefficients and HAC standard errors
+#--------------------------------------------------
+
+beta <- coef(m_nb)
+se_hac <- sqrt(diag(V_hac))
+
+z_hac <- beta / se_hac
+p_hac <- 2 * pnorm(-abs(z_hac))
+
+#--------------------------------------------------
+# 3. Calculate IRRs and 95% CIs
+#--------------------------------------------------
+
+full_multivariable <- data.frame(
+  term = names(beta),
+  IRR = exp(beta),
+  lower = exp(beta - 1.96 * se_hac),
+  upper = exp(beta + 1.96 * se_hac),
+  p_value = p_hac,
+  row.names = NULL
+)
+
+#--------------------------------------------------
+# 4. Give variables reader-friendly names
+#--------------------------------------------------
+
+full_multivariable <- full_multivariable %>%
+  mutate(
+    Variable = case_when(
+      term == "(Intercept)" ~ "Intercept",
+      term == "Policy_Indicator" ~ "Free Maternity Policy",
+      term == "Health_WorkerStrike" ~ "Healthcare-worker strike period",
+      term == "HIV_Incidence" ~ "HIV incidence",
+      term == "Malaria_Incidence" ~ "Malaria incidence",
+      term == "neonatal_sepsis_Incidence" ~ "Neonatal sepsis incidence",
+      term == "birth_defects_Incidence" ~ "Birth defects incidence",
+      term == "yoa" ~ "Year of admission",
+      
+      term == "month_dummyFeb" ~ "February",
+      term == "month_dummyMar" ~ "March",
+      term == "month_dummyApr" ~ "April",
+      term == "month_dummyMay" ~ "May",
+      term == "month_dummyJun" ~ "June",
+      term == "month_dummyJul" ~ "July",
+      term == "month_dummyAug" ~ "August",
+      term == "month_dummySep" ~ "September",
+      term == "month_dummyOct" ~ "October",
+      term == "month_dummyNov" ~ "November",
+      term == "month_dummyDec" ~ "December",
+      
+      TRUE ~ term
+    )
+  )
+
+#--------------------------------------------------
+# 5. Add January as reference category
+#--------------------------------------------------
+
+jan_reference <- data.frame(
+  term = "month_dummyJan",
+  IRR = 1,
+  lower = NA,
+  upper = NA,
+  p_value = NA,
+  Variable = "January (Reference)"
+)
+
+# Place January immediately before February
+month_position <- which(full_multivariable$term == "month_dummyFeb")
+
+full_multivariable <- bind_rows(
+  full_multivariable[1:(month_position - 1), ],
+  jan_reference,
+  full_multivariable[month_position:nrow(full_multivariable), ]
+)
+
+#--------------------------------------------------
+# 6. Format for thesis
+#--------------------------------------------------
+
+full_multivariable_table <- full_multivariable %>%
+  mutate(
+    IRR = ifelse(
+      Variable == "January (Reference)",
+      "1.00",
+      sprintf("%.2f", IRR)
+    ),
+    
+    `95% CI` = ifelse(
+      Variable == "January (Reference)",
+      "Reference",
+      paste0(
+        sprintf("%.2f", lower),
+        "--",
+        sprintf("%.2f", upper)
+      )
+    ),
+    
+    `p-value` = case_when(
+      Variable == "January (Reference)" ~ "---",
+      p_value < 0.001 ~ "<0.001",
+      TRUE ~ sprintf("%.3f", p_value)
+    )
+  ) %>%dplyr::select(
+    Variable,
+    IRR,
+    `95% CI`,
+    `p-value`
+  )
+
+full_multivariable_table
+
+
+
+latex_multivariable <- full_multivariable_table %>%
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    escape = FALSE,
+    align = c("l", "c", "c", "c"),
+    caption = "Full results from the multivariable negative binomial regression model",
+    label = "full_multivariable"
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    position = "center"
+  )
+
+latex_multivariable
+   ##lets test interraction
+m_nbInte<- MASS::glm.nb(
+  deathsunder1 ~Policy_Indicator+Health_WorkerStrike+HIV_Incidence+Malaria_Incidence+neonatal_sepsis_Incidence+birth_defects_Incidence+yoa+month_dummy+ offset(log(person_Month_under1)),
+  data =dtana
+)
+
+n <- nrow(dtana)
+L <- floor(n^(1/4))
+
+V_hac <- sandwich::NeweyWest(
+  m_nbInte,
+  lag = L,
+  prewhite = FALSE,
+  adjust = TRUE
+)
+
+beta_time <- coef(m_nb)["Policy_Indicator"]
+se_time <- sqrt(diag(V_hac))["Policy_Indicator"]
+
+z_time <- beta_time / se_time
+p_time <- 2 * (1 - pnorm(abs(z_time)))
+
+policy_effect_tableCITS<- data.frame(
+  IRR = exp(beta_time),
+  lower = exp(beta_time - 1.96 * se_time),
+  upper = exp(beta_time + 1.96 * se_time),
+  p_value = p_time
+) %>%
+  mutate(
+    IRR = round(IRR, 2),
+    `95% CI` = paste0(round(lower, 2), "–", round(upper, 2)),
+    `p-value` = round(p_value, 3)
+  ) %>%dplyr::select(IRR, `95% CI`, `p-value`)
+
+policy_effect_tableCITS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ##CITS model
+#fitPoisson model and cehck overdispersion
+m_pois <- glm(
+  deathsunder1 ~ Policy_Indicator +
+    Health_WorkerStrike +month_dummy +
+    offset(log(deaths5to14)),
+  family = poisson(link = "log"),
+  data = dtana
+)
+
+m_nb<-m_pois
+
+n <- nrow(dtana)
+L <- floor(n^(1/4))
+
+V_hac <- sandwich::NeweyWest(
+  m_nb,
+  lag = L,
+  prewhite = FALSE,
+  adjust = TRUE
+)
+
+beta_time <- coef(m_nb)["Policy_Indicator"]
+se_time <- sqrt(diag(V_hac))["Policy_Indicator"]
+
+z_time <- beta_time / se_time
+p_time <- 2 * (1 - pnorm(abs(z_time)))
+
+policy_effect_tableCITS<- data.frame(
+  IRR = exp(beta_time),
+  lower = exp(beta_time - 1.96 * se_time),
+  upper = exp(beta_time + 1.96 * se_time),
+  p_value = p_time
+) %>%
+  mutate(
+    IRR = round(IRR, 2),
+    `95% CI` = paste0(round(lower, 2), "–", round(upper, 2)),
+    `p-value` = round(p_value, 3)
+  ) %>%dplyr::select(IRR, `95% CI`, `p-value`)
+
+policy_effect_tableCITS
+
+# CITS model:Overdispesion detected:P-value
+#dispersion ratio =   5.378
+#Pearson's Chi-Squared = 483.991
+                #p-value = < 0.001
+
+#Overdispersion detected.
+
+check_overdispersion(m_pois)
+
+
+
+
+##Fit negative binomial model as there was an evidence of overdispersion
 m_nb <- MASS::glm.nb(
   deathsunder1 ~Policy_Indicator+month_dummy+Health_WorkerStrike+ offset(log(deaths5to14)),
   data =dtana
@@ -1457,4 +1783,656 @@ policy_effect_tableCITS<- data.frame(
   ) %>%dplyr::select(IRR, `95% CI`, `p-value`)
 
 policy_effect_tableCITS
+
+m_cits<-m_nb
+m_cits
+
+
+
+
+#--------------------------------------------------
+# 1. Fit CITS negative binomial model full model
+#--------------------------------------------------
+
+m_cits <- MASS::glm.nb(
+  deathsunder1 ~ Policy_Indicator +
+    month_dummy +
+    Health_WorkerStrike +
+    offset(log(deaths5to14)),
+  data = dtana
+)
+
+summary(m_cits)
+
+#--------------------------------------------------
+# 2. Newey-West HAC variance-covariance matrix
+#--------------------------------------------------
+
+n <- nobs(m_cits)
+L <- floor(n^(1/4))
+
+V_hac_cits <- sandwich::NeweyWest(
+  m_cits,
+  lag = L,
+  prewhite = FALSE,
+  adjust = TRUE
+)
+
+#--------------------------------------------------
+# 3. Extract coefficients and HAC standard errors
+#--------------------------------------------------
+
+beta_cits <- coef(m_cits)
+se_hac_cits <- sqrt(diag(V_hac_cits))
+
+z_hac_cits <- beta_cits / se_hac_cits
+p_hac_cits <- 2 * pnorm(-abs(z_hac_cits))
+
+#--------------------------------------------------
+# 4. Calculate IRRs and 95% confidence intervals
+#--------------------------------------------------
+
+full_cits <- data.frame(
+  term = names(beta_cits),
+  IRR = exp(beta_cits),
+  lower = exp(beta_cits - 1.96 * se_hac_cits),
+  upper = exp(beta_cits + 1.96 * se_hac_cits),
+  p_value = p_hac_cits,
+  row.names = NULL
+)
+
+#--------------------------------------------------
+# 5. Give variables reader-friendly names
+#--------------------------------------------------
+
+full_cits <- full_cits %>%
+  mutate(
+    Variable = case_when(
+      term == "(Intercept)" ~ "Intercept",
+      term == "Policy_Indicator" ~ "Free Maternity Policy",
+      term == "Health_WorkerStrike" ~ "Healthcare-worker strike period",
+      
+      term == "month_dummyFeb" ~ "February",
+      term == "month_dummyMar" ~ "March",
+      term == "month_dummyApr" ~ "April",
+      term == "month_dummyMay" ~ "May",
+      term == "month_dummyJun" ~ "June",
+      term == "month_dummyJul" ~ "July",
+      term == "month_dummyAug" ~ "August",
+      term == "month_dummySep" ~ "September",
+      term == "month_dummyOct" ~ "October",
+      term == "month_dummyNov" ~ "November",
+      term == "month_dummyDec" ~ "December",
+      
+      TRUE ~ term
+    )
+  )
+
+#--------------------------------------------------
+# 6. Add January as reference category
+#--------------------------------------------------
+
+jan_reference_cits <- data.frame(
+  term = "month_dummyJan",
+  IRR = 1,
+  lower = NA,
+  upper = NA,
+  p_value = NA,
+  Variable = "January (Reference)"
+)
+
+month_position <- which(full_cits$term == "month_dummyFeb")
+
+full_cits <- bind_rows(
+  full_cits[1:(month_position - 1), ],
+  jan_reference_cits,
+  full_cits[month_position:nrow(full_cits), ]
+)
+
+#--------------------------------------------------
+# 7. Format for thesis
+#--------------------------------------------------
+
+full_cits_table <- full_cits %>%
+  mutate(
+    IRR = ifelse(
+      Variable == "January (Reference)",
+      "1.00",
+      sprintf("%.2f", IRR)
+    ),
+    
+    `95% CI` = ifelse(
+      Variable == "January (Reference)",
+      "Reference",
+      paste0(
+        sprintf("%.2f", lower),
+        "--",
+        sprintf("%.2f", upper)
+      )
+    ),
+    
+    `p-value` = case_when(
+      Variable == "January (Reference)" ~ "---",
+      p_value < 0.001 ~ "<0.001",
+      TRUE ~ sprintf("%.3f", p_value)
+    )
+  ) %>%
+  dplyr::select(
+    Variable,
+    IRR,
+    `95% CI`,
+    `p-value`
+  )
+
+full_cits_table
+
+#--------------------------------------------------
+# 8. Create LaTeX-ready table
+#--------------------------------------------------
+
+latex_cits <- full_cits_table %>%
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    escape = FALSE,
+    align = c("l", "c", "c", "c"),
+    caption = "Full results from the controlled interrupted time series negative binomial model",
+    label = "full_cits"
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    position = "center"
+  )
+
+latex_cits
+
+
+
+
+
+
+
+
+
+
+
+
+
+#--------------------------------------------------
+# 1. Multivariable NB model WITH interaction
+#--------------------------------------------------
+
+m_nb_int <- MASS::glm.nb(
+  deathsunder1 ~ Policy_Indicator +
+    Post_Interraction +
+    Health_WorkerStrike +
+    HIV_Incidence +
+    Malaria_Incidence +
+    neonatal_sepsis_Incidence +
+    birth_defects_Incidence +
+    yoa +
+    month_dummy +
+    offset(log(person_Month_under1)),
+  data = dtana
+)
+
+n_nb <- nobs(m_nb_int)
+L_nb <- floor(n_nb^(1/4))
+
+V_hac_nb <- sandwich::NeweyWest(
+  m_nb_int,
+  lag = L_nb,
+  prewhite = FALSE,
+  adjust = TRUE
+)
+
+beta_nb <- coef(m_nb_int)["Post_Interraction"]
+se_nb <- sqrt(diag(V_hac_nb))["Post_Interraction"]
+
+z_nb <- beta_nb / se_nb
+p_nb <- 2 * pnorm(-abs(z_nb))
+
+#--------------------------------------------------
+# 2. CITS NB model WITH interaction
+#--------------------------------------------------
+
+m_cits_int <- MASS::glm.nb(
+  deathsunder1 ~ Policy_Indicator +
+    Post_Interraction +
+    month_dummy +
+    Health_WorkerStrike +
+    offset(log(deaths5to14)),
+  data = dtana
+)
+
+n_cits <- nobs(m_cits_int)
+L_cits <- floor(n_cits^(1/4))
+
+V_hac_cits <- sandwich::NeweyWest(
+  m_cits_int,
+  lag = L_cits,
+  prewhite = FALSE,
+  adjust = TRUE
+)
+
+beta_cits <- coef(m_cits_int)["Post_Interraction"]
+se_cits <- sqrt(diag(V_hac_cits))["Post_Interraction"]
+
+z_cits <- beta_cits / se_cits
+p_cits <- 2 * pnorm(-abs(z_cits))
+
+#--------------------------------------------------
+# 3. Combine interaction results
+#--------------------------------------------------
+
+interaction_table <- data.frame(
+  Model = c(
+    "Multivariable regression",
+    "Controlled interrupted time series"
+  ),
+  IRR = c(
+    exp(beta_nb),
+    exp(beta_cits)
+  ),
+  lower = c(
+    exp(beta_nb - 1.96 * se_nb),
+    exp(beta_cits - 1.96 * se_cits)
+  ),
+  upper = c(
+    exp(beta_nb + 1.96 * se_nb),
+    exp(beta_cits + 1.96 * se_cits)
+  ),
+  p_value = c(
+    p_nb,
+    p_cits
+  )
+) %>%
+  mutate(
+    IRR = sprintf("%.2f", IRR),
+    `95% CI` = paste0(
+      sprintf("%.2f", lower),
+      "--",
+      sprintf("%.2f", upper)
+    ),
+    `p-value` = case_when(
+      p_value < 0.001 ~ "<0.001",
+      TRUE ~ sprintf("%.3f", p_value)
+    )
+  ) %>%
+  dplyr::select(
+    Model,
+    IRR,
+    `95% CI`,
+    `p-value`
+  )
+
+interaction_table
+
+
+latex_interaction <- interaction_table %>%
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    escape = FALSE,
+    align = c("l", "c", "c", "c"),
+    caption = "Assessment of post-intervention trend change in the empirical models",
+    label = "interaction_empirical"
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    position = "center"
+  )
+
+latex_interaction
+
+
+
+
+
+
+
+
+
+#Model diagonistics
+
+m_cits <- MASS::glm.nb(
+  deathsunder1 ~ Policy_Indicator +
+    month_dummy +
+    Health_WorkerStrike +
+    offset(log(deaths5to14)),
+  data = dtana
+)
+
+m_nb<- MASS::glm.nb(
+  deathsunder1 ~Policy_Indicator+Health_WorkerStrike+HIV_Incidence+Malaria_Incidence+neonatal_sepsis_Incidence+birth_defects_Incidence+yoa+month_dummy+ offset(log(person_Month_under1)),
+  data =dtana
+)
+
+
+library(ggplot2)
+library(gridExtra)
+
+#--------------------------------------------------
+# 1. Extract Pearson residuals
+#--------------------------------------------------
+
+res_mult <- residuals(m_nb, type = "pearson")
+res_cits <- residuals(m_cits, type = "pearson")
+
+#--------------------------------------------------
+# 2. ACF and PACF objects
+#--------------------------------------------------
+
+acf_mult <- acf(
+  res_mult,
+  lag.max = 12,
+  plot = FALSE
+)
+
+pacf_mult <- pacf(
+  res_mult,
+  lag.max = 12,
+  plot = FALSE
+)
+
+acf_cits <- acf(
+  res_cits,
+  lag.max = 12,
+  plot = FALSE
+)
+
+pacf_cits <- pacf(
+  res_cits,
+  lag.max = 12,
+  plot = FALSE
+)
+
+#--------------------------------------------------
+# 3. Function to convert ACF/PACF to ggplot
+#--------------------------------------------------
+
+make_acf_plot <- function(acf_obj, title, n_obs, ylab = "ACF") {
+  
+  df <- data.frame(
+    lag = as.numeric(acf_obj$lag),
+    value = as.numeric(acf_obj$acf)
+  )
+  
+  ggplot(df, aes(x = lag, y = value)) +
+    geom_hline(yintercept = 0) +
+    geom_segment(aes(xend = lag, yend = 0)) +
+    geom_hline(
+      yintercept = c(
+        1.96 / sqrt(n_obs),
+        -1.96 / sqrt(n_obs)
+      ),
+      linetype = "dashed"
+    ) +
+    labs(
+      title = title,
+      x = "Lag (months)",
+      y = ylab
+    ) +
+    scale_x_continuous(breaks = 0:12) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(face = "bold"),
+      panel.grid.minor = element_blank()
+    )
+}
+
+
+make_pacf_plot <- function(pacf_obj, title, n_obs) {
+  
+  df <- data.frame(
+    lag = as.numeric(pacf_obj$lag),
+    value = as.numeric(pacf_obj$acf)
+  )
+  
+  ggplot(df, aes(x = lag, y = value)) +
+    geom_hline(yintercept = 0) +
+    geom_segment(aes(xend = lag, yend = 0)) +
+    geom_hline(
+      yintercept = c(
+        1.96 / sqrt(n_obs),
+        -1.96 / sqrt(n_obs)
+      ),
+      linetype = "dashed"
+    ) +
+    labs(
+      title = title,
+      x = "Lag (months)",
+      y = "PACF"
+    ) +
+    scale_x_continuous(breaks = 1:12) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(face = "bold"),
+      panel.grid.minor = element_blank()
+    )
+}
+
+#--------------------------------------------------
+# 4. Create the four plots
+#--------------------------------------------------
+
+n_mult <- nobs(m_nb)
+n_cits <- nobs(m_cits)
+
+p1 <- make_acf_plot(
+  acf_mult,
+  #A) Multivariable regression: ACF",
+  "A",
+  n_mult
+)
+
+p2 <- make_pacf_plot(
+  pacf_mult,
+  #B) Multivariable regression: PACF",
+  "B",
+  n_mult
+)
+
+p3 <- make_acf_plot(
+  acf_cits,
+  #"C) CITS: ACF",
+  "C",
+  n_cits
+)
+
+p4 <- make_pacf_plot(
+  pacf_cits,
+  #"D) CITS: PACF",
+  "D",
+  n_cits
+)
+
+autocorrelation_plot <- grid.arrange(
+  p1, p2, p3, p4,
+  ncol = 2
+)
+
+ggsave(
+  "graphs/autocorrelation_diagnostics.png",
+  autocorrelation_plot,
+  width = 10,
+  height = 8,
+  dpi = 300
+)
+
+ggsave(
+  "graphs/autocorrelation_diagnostics.pdf",
+  autocorrelation_plot,
+  width = 10,
+  height = 8
+)
+
+
+
+##Ljung test
+
+#--------------------------------------------------
+# Ljung-Box test for residual autocorrelation
+#--------------------------------------------------
+
+lb_mult <- Box.test(
+  residuals(m_nb, type = "pearson"),
+  lag = 12,
+  type = "Ljung-Box"
+)
+
+lb_cits <- Box.test(
+  residuals(m_cits, type = "pearson"),
+  lag = 12,
+  type = "Ljung-Box"
+)
+
+lb_mult
+lb_cits
+
+
+#==================================================
+# AUTOMATICALLY GENERATE AUTOCORRELATION TABLE
+#==================================================
+
+# Ljung-Box tests
+lb_mult <- Box.test(
+  residuals(m_nb, type = "pearson"),
+  lag = 12,
+  type = "Ljung-Box"
+)
+
+lb_cits <- Box.test(
+  residuals(m_cits, type = "pearson"),
+  lag = 12,
+  type = "Ljung-Box"
+)
+
+#--------------------------------------------------
+# Function for formatting p-values
+#--------------------------------------------------
+
+format_p <- function(p) {
+  if (p < 0.001) {
+    return("< 0.001")
+  } else {
+    return(sprintf("%.3f", p))
+  }
+}
+
+#--------------------------------------------------
+# Create table data
+#--------------------------------------------------
+
+autocorrelation_table <- data.frame(
+  Model = c(
+    "Multivariable regression",
+    "Controlled interrupted time series"
+  ),
+  
+  `Ljung--Box Q` = c(
+    unname(lb_mult$statistic),
+    unname(lb_cits$statistic)
+  ),
+  
+  `Degrees of freedom` = c(
+    unname(lb_mult$parameter),
+    unname(lb_cits$parameter)
+  ),
+  
+  `p-value` = c(
+    format_p(lb_mult$p.value),
+    format_p(lb_cits$p.value)
+  ),
+  
+  check.names = FALSE
+)
+
+#--------------------------------------------------
+# Round test statistics
+#--------------------------------------------------
+
+autocorrelation_table$`Ljung--Box Q` <-
+  sprintf(
+    "%.2f",
+    as.numeric(autocorrelation_table$`Ljung--Box Q`)
+  )
+
+#--------------------------------------------------
+# Create LaTeX rows
+#--------------------------------------------------
+
+latex_rows <- apply(
+  autocorrelation_table,
+  1,
+  function(x) {
+    paste(
+      x[1],
+      x[2],
+      x[3],
+      x[4],
+      sep = " & "
+    )
+  }
+)
+
+latex_rows <- paste0(
+  latex_rows,
+  " \\\\"
+)
+
+#--------------------------------------------------
+# Create complete LaTeX table
+#--------------------------------------------------
+
+latex_table <- paste0(
+  "\\begin{table}[!h]
+\\centering
+\\caption{\\label{tab:autocorrelation}
+\\textbf{Assessment of residual autocorrelation in the empirical models}}
+\\begin{tabular}{lrrr}
+\\toprule
+Model & Ljung--Box $Q$ & Degrees of freedom & $p$-value \\\\
+\\midrule
+",
+  paste(latex_rows, collapse = "\n"),
+  "
+\\bottomrule
+\\end{tabular}
+
+\\vspace{0.1cm}
+
+\\begin{minipage}{0.95\\textwidth}
+\\small
+\\textit{Note:} The Ljung--Box test was applied to Pearson residuals
+through lag 12. The null hypothesis was that the residual
+autocorrelations through lag 12 were jointly equal to zero.
+A $p$-value greater than 0.05 indicates no statistically significant
+evidence of residual autocorrelation.
+\\end{minipage}
+
+\\end{table}
+"
+)
+
+#--------------------------------------------------
+# Write LaTeX file
+#--------------------------------------------------
+
+writeLines(
+  latex_table,
+  "data/autocorrelation_testljung.tex"
+)
+
+cat(latex_table)
+
+
+
+
+
+
+
+
+
+
 
