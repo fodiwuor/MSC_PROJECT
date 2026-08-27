@@ -48,9 +48,9 @@ perf_plot <- perf %>%
     
     ## --- dynamic facet labels using true_val ---
     facet_label = case_when(
-      EstimandScenario == "Small"    ~ paste0("Small(", round(true_val, 4), ")"),
-      EstimandScenario == "Moderate" ~ paste0("Moderate(", round(true_val, 4), ")"),
-      EstimandScenario == "Large"    ~ paste0("Large(", round(true_val, 4), ")"),
+      EstimandScenario == "Small"    ~ paste0("Small (", round(true_val, 4), ")"),
+      EstimandScenario == "Moderate" ~ paste0("Moderate (", round(true_val, 4), ")"),
+      EstimandScenario == "Large"    ~ paste0("Large (", round(true_val, 4), ")"),
       TRUE ~ as.character(EstimandScenario)
     )
   ) %>%
@@ -128,42 +128,89 @@ p_trd2 <- perf_plot %>%
   filter(Method == "CITS_spill_3pct") %>%
   ggplot(aes(x = n, group = 1)) +
   
-  geom_line(aes(y = Empirical_SE, colour = "Empirical SE")) +
-  geom_point(aes(y = Empirical_SE, colour = "Empirical SE"), size = 1.5) +
+  geom_line(
+    aes(y = Empirical_SE, colour = "Empirical SE"),
+    linewidth = 0.7
+  ) +
   
-  geom_line(aes(y = avg_model_SE, colour = "Model-based SE"), linetype = "dashed") +
-  geom_point(aes(y = avg_model_SE, colour = "Model-based SE"), size = 1.5) +
+  geom_point(
+    aes(y = Empirical_SE, colour = "Empirical SE"),
+    size = 1.8
+  ) +
+  
+  geom_line(
+    aes(y = avg_model_SE, colour = "Model-based SE"),
+    linetype = "dashed",
+    linewidth = 0.7
+  ) +
+  
+  geom_point(
+    aes(y = avg_model_SE, colour = "Model-based SE"),
+    size = 1.8
+  ) +
   
   facet_grid(facet_label ~ rho_f) +
   
   scale_colour_manual(
     name = "SE type",
     values = c(
-      "Empirical SE" = "#F8766D",
+      "Empirical SE"   = "#F8766D",
       "Model-based SE" = "#00BFC4"
     )
   ) +
   
   labs(
     x = "Length of time series (n)",
-    y = "Standard Error (SE)",
+    y = "Standard error (SE)",
     title = ""
   ) +
   
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    plot.title = element_text(hjust = 0.5),
-    plot.margin = margin(t = 20, r = 10, b = 10, l = 10),
     
-    # make strip text a bit smaller
-    strip.text.y.right = element_text(size = 10, angle = -90),
+    # Top strips: autocorrelation levels
+    strip.text.x = element_text(
+      size = 9,
+      face = "bold",
+      margin = margin(t = 4, b = 4)
+    ),
     
-    # make strip area wider
-    strip.switch.pad.grid = unit(0.2, "cm"),
-    strip.placement = "outside"
+    # Right strips: Small, Moderate, Large
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t =3, b =3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 10
+    ),
+    
+    legend.position = "right",
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
+
+p_trd2
 
 # Save with slightly larger width (important)
 ggsave(
@@ -189,35 +236,103 @@ ggsave(
 ##Coverage graphs
 ##Confidence interval coverage
 #coveragetrd
-p_trd_cova<- perf_plot %>%
+p_trd_cova <- perf_plot %>%
   filter(Method == "CITS_spill_3pct") %>%
   ggplot(
     aes(
       x      = n,
       y      = coverage_pct,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
     )
-  ) +geom_hline(yintercept = 95, colour = "black", linetype = "solid", size = 0.8)+
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  ) +
+  
+  geom_hline(
+    yintercept = 95,
+    colour = "black",
+    linetype = "solid",
+    linewidth = 0.8
+  ) +
+  
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Coverage(%)",
+    y = "Coverage (%)",
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = ""
   ) +
+  
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
+    
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "right",
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
 
-p5<-p_trd_cova 
+p5 <- p_trd_cova
 
 ggsave(
   filename = "graphs/p_CITS_spill_coverage.png",
@@ -270,30 +385,92 @@ p_trd_power <- perf_plot %>%
       group  = rho_f
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +
+  
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  geom_point(
+    size = 2.2
+  ) +
+  
   geom_hline(
     yintercept = 80,
     linetype = "solid",
-    colour ="black",
+    colour = "black",
     linewidth = 0.8
   ) +
+  
   facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Power",
+    y = "Power (%)",
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = ""
   ) +
+  
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
+    
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "right",
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
 
-p7<-p_trd_power
+p7 <- p_trd_power
 p7
 ggsave(
   filename = "graphs/p_CITS_spill_Power.png",
@@ -324,30 +501,105 @@ p_trd_mse <- perf_plot %>%
   ggplot(
     aes(
       x      = n,
-      y      =MSE_estimate,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      y      = MSE_estimate,
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  
+  # CHANGED: slightly thicker lines for consistency with the power plot
+  # and better readability in the thesis PDF.
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  # CHANGED: slightly larger points so the individual simulation
+  # conditions remain visible when the figure is reduced on the page.
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Mean Squared Error(MSE)",
+    
+    # CHANGED: corrected spacing and capitalization.
+    y = "Mean squared error (MSE)",
+    
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = ""
   ) +
+  
+  # ADDED: use the same rho notation as in the power plot
+  # so all simulation figures are visually consistent.
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  # ADDED: matching shape labels for consistency.
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
+    
+    # CHANGED: match the facet-strip formatting used for your power plot.
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    # ADDED: explicit font sizes so the figure remains readable
+    # after insertion into the thesis.
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "right",
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
 
-p9<-p_trd_mse
+p9 <- p_trd_mse
+p9
 
 ggsave(
   filename = "graphs/p_CITS_spill_mse.png",
@@ -435,23 +687,42 @@ p_trd_ridge <- ggplot(
   geom_density_ridges(
     scale          = 1.2,
     rel_min_height = 0.001,
-    size           =1,
-    alpha          = 0.7
+    
+    # CHANGED: use a thinner outline because five rho distributions
+    # overlap within each time-series length. This reduces visual crowding.
+    linewidth      = 0.6,
+    
+    # CHANGED: slightly more transparency so overlapping ridgelines
+    # are easier to distinguish.
+    alpha          = 0.6
   ) +
+  
   geom_vline(
     data        = true_lines,
     aes(xintercept = true_B),
     linetype    = "dashed",
     colour      = "black",
-    inherit.aes = FALSE
+    
+    # ADDED: slightly stronger line width so the true effect remains
+    # clearly visible when printed.
+    linewidth   = 0.7
+    
+    #inherit.aes = FALSE
   ) +
+  
   facet_grid(. ~ facet_label) +
+  
   labs(
-    title  = "",
-    x      ="Estimated intervention effect (log IRR)",
-    y      = "Length of time series (n)"
-    #colour = "Autocorrelation (ρ)"
-  ) +scale_colour_discrete(
+    title = "",
+    
+    x = "Estimated intervention effect (log IRR)",
+    
+    # CHANGED: shorter and slightly more direct wording.
+    # n still makes clear that this is the series length.
+    y = "Time-series length (n)"
+  ) +
+  
+  scale_colour_discrete(
     labels = c(
       expression(rho == 0.0),
       expression(rho == 0.2),
@@ -460,17 +731,51 @@ p_trd_ridge <- ggplot(
       expression(rho == 0.8)
     ),
     name = expression("Autocorrelation (" * rho * ")")
-  )+
+  ) +
+  
   ggridges::theme_ridges() +
+  
   theme(
-    legend.position  = "bottom",
+    legend.position = "bottom",
+    
     strip.background = element_rect(fill = "grey95"),
-    strip.text       = element_text(size = 11, face = "bold"),  # smaller labels
-    panel.grid.minor = element_blank(),
-    axis.title.x     = element_text(hjust = 0.5, vjust = -0.5) 
+    
+    # CHANGED: slightly larger facet labels for better readability
+    # in the printed thesis.
+    strip.text = element_text(
+      size = 10,
+      face = "bold",
+      margin = margin(t = 3, b = 4)
+    ),
+    
+    # ADDED: explicitly increase axis-title size rather than relying
+    # on theme_ridges() defaults.
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    # ADDED: enlarge tick labels so values remain readable when the
+    # figure is inserted at thesis-page width.
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    # ADDED: improve legend readability in print.
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
-# optional: tighten x-range if you want
-# + coord_cartesian(xlim = c(-2, 1))
 
 p_trd_ridge
 p1<-p_trd_ridge
@@ -499,38 +804,97 @@ ggsave(
 
 ##Bias
 p_trd_bias <- perf_plot %>%
-  filter(Method == "CITS_spill_3pct") %>%
+  filter(Method == "CITS_spill_3pct") %>%   # CHECK: should this be 10pct?
   ggplot(
     aes(
       x      = n,
       y      = Bias_percent,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
-  labs(
-    x = "Length of time series (n)",
-    y = "Bias(%)",
-    colour = "Autocorrelation (ρ)",
-    shape  = "Autocorrelation (ρ)",
-    title = ""
+  
+  geom_line(
+    linewidth = 0.7
   ) +
+  
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
+  labs(
+    title = "",
+    x = "Length of time series (n)",
+    y = "Percent bias (%)"
+  ) +
+  
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
+    
+    strip.text.y = element_text(
+      size = 9,
+      face = "bold",
+      margin = margin(t = 5, b = 5, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "right",
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
 
-p12<-p_trd_bias 
+p12 <- p_trd_bias
 
 ggsave(
   filename = "graphs/p_CITS_spill_bias.png",
-  plot     = p_trd_bias ,
+  plot     = p_trd_bias,
   width    = 8,      # inches
   height   = 4.5,    # adjust as you like
   dpi      = 300     # good for publication
@@ -538,11 +902,12 @@ ggsave(
 
 ggsave(
   filename = "graphs/p_CITS_spill_bias.pdf",
-  plot     = p_trd_bias ,
+  plot     = p_trd_bias,
   width    = 8,      # inches
   height   = 4.5,    # adjust as you like
-  device = cairo_pdf    # good for publication
+  device   = cairo_pdf    # good for publication
 )
+
 
 
 
@@ -587,9 +952,9 @@ perf_clean <- perf %>%
     
     # dynamic labels with true_val (same idea as your facet_label)
     effect_label = case_when(
-      EstimandScenario == "Small"    ~ paste0("Small(",    round(true_val, 4), ")"),
-      EstimandScenario == "Moderate" ~ paste0("Moderate(", round(true_val, 4), ")"),
-      EstimandScenario == "Large"    ~ paste0("Large(",    round(true_val, 4), ")"),
+      EstimandScenario == "Small"    ~ paste0("Small (",    round(true_val, 4), ")"),
+      EstimandScenario == "Moderate" ~ paste0("Moderate (", round(true_val, 4), ")"),
+      EstimandScenario == "Large"    ~ paste0("Large (",    round(true_val, 4), ")"),
       TRUE ~ as.character(EstimandScenario)
     )
   )
@@ -626,7 +991,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -706,7 +1071,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -785,7 +1150,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -869,7 +1234,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -950,7 +1315,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -1029,7 +1394,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -1155,9 +1520,9 @@ perf_plot <- perf %>%
     
     ## --- dynamic facet labels using true_val ---
     facet_label = case_when(
-      EstimandScenario == "Small"    ~ paste0("Small(", round(true_val, 4), ")"),
-      EstimandScenario == "Moderate" ~ paste0("Moderate(", round(true_val, 4), ")"),
-      EstimandScenario == "Large"    ~ paste0("Large(", round(true_val, 4), ")"),
+      EstimandScenario == "Small"    ~ paste0("Small (", round(true_val, 4), ")"),
+      EstimandScenario == "Moderate" ~ paste0("Moderate (", round(true_val, 4), ")"),
+      EstimandScenario == "Large"    ~ paste0("Large (", round(true_val, 4), ")"),
       TRUE ~ as.character(EstimandScenario)
     )
   ) %>%
@@ -1175,53 +1540,110 @@ mutate(
 )
 
 
- #STANDARD ERROR PLOTS
+
+#STANDARD ERROR PLOTS
+
 ##traditional regression plot
 p_trd2 <- perf_plot %>%
   filter(Method == "Trd") %>%
   ggplot(aes(x = n, group = 1)) +
   
   # ---- Empirical SE ----
-geom_line(aes(y = Empirical_SE, colour = "Empirical SE")) +
-  geom_point(aes(y = Empirical_SE, colour = "Empirical SE"), size = 1.5) +
+geom_line(
+  aes(y = Empirical_SE, colour = "Empirical SE"),
+  linewidth = 0.7
+) +
+  
+  geom_point(
+    aes(y = Empirical_SE, colour = "Empirical SE"),
+    size = 1.8
+  ) +
   
   # ---- Model-based SE ----
-geom_line(aes(y = avg_model_SE, colour = "Model-based SE"), linetype = "dashed") +
-  geom_point(aes(y = avg_model_SE, colour = "Model-based SE"), size = 1.5) +
+geom_line(
+  aes(y = avg_model_SE, colour = "Model-based SE"),
+  linetype = "dashed",
+  linewidth = 0.7
+) +
+  
+  geom_point(
+    aes(y = avg_model_SE, colour = "Model-based SE"),
+    size = 1.8
+  ) +
   
   facet_grid(facet_label ~ rho_f) +
+  
   scale_colour_manual(
     name = "SE type",
     values = c(
-      "Empirical SE" = "#F8766D",   # red (your original Trd colour)
-      "Model-based SE" = "#00BFC4" # turquoise to match CITS
+      "Empirical SE"   = "#F8766D",
+      "Model-based SE" = "#00BFC4"
     )
   ) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Standard Error(SE)",
+    y = "Standard error (SE)",
     title = "A"
   ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
+    
+    strip.text.x = element_text(
+      size = 9,
+      face = "bold",
+      margin = margin(t = 4, b = 4)
+    ),
+    
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 10
+    ),
+    
+    legend.position = "right",
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
     panel.grid.minor = element_blank()
   )
 
-p3<-p_trd2
+p3 <- p_trd2
 
 ggsave(
   filename = "graphs/p_trd_SE_traditional.png",
   plot     = p_trd2,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
 
 ggsave(
   filename = "graphs/p_trd_SE_traditional.pdf",
   plot     = p_trd2,
-  width    = 8,      # inches
+  width    = 8,
   height   = 4.5,
   device   = cairo_pdf
 )
@@ -1232,42 +1654,88 @@ p_cits2 <- perf_plot %>%
   filter(Method == "CITS") %>%
   ggplot(aes(x = n, group = 1)) +
   
-  # ---- Empirical SE (your existing turquoise) ----
-geom_line(aes(y = Empirical_SE, colour = "Empirical SE")) +
-  geom_point(aes(y = Empirical_SE, colour = "Empirical SE"), size = 1.5) +
+  # ---- Empirical SE ----
+geom_line(
+  aes(y = Empirical_SE, colour = "Empirical SE"),
+  linewidth = 0.7
+) +
   
-  # ---- Model-based SE (add second colour, dashed) ----
-geom_line(aes(y = avg_model_SE, colour = "Model-based SE"), 
-          linetype = "dashed", size = 0.9) +
-  geom_point(aes(y = avg_model_SE, colour = "Model-based SE"), size = 1.3) +
+  geom_point(
+    aes(y = Empirical_SE, colour = "Empirical SE"),
+    size = 1.8
+  ) +
   
-  facet_grid(facet_label~ rho_f) +
+  # ---- Model-based SE ----
+geom_line(
+  aes(y = avg_model_SE, colour = "Model-based SE"),
+  linetype = "dashed",
+  linewidth = 0.7
+) +
+  
+  geom_point(
+    aes(y = avg_model_SE, colour = "Model-based SE"),
+    size = 1.8
+  ) +
+  
+  facet_grid(facet_label ~ rho_f) +
+  
   scale_colour_manual(
-    name = "SE Type",
+    name = "SE type",
     values = c(
-      "Empirical SE"   = "#F8766D",  # your CITS turquoise
-      "Model-based SE" = "#00BFC4"  # soft red (contrasts nicely)
+      "Empirical SE"   = "#F8766D",
+      "Model-based SE" = "#00BFC4"
     )
   ) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Standard Error(SE)",
+    y = "Standard error (SE)",
     title = "B"
   ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "none"
+    
+    strip.text.x = element_text(
+      size = 9,
+      face = "bold",
+      margin = margin(t = 4, b = 4)
+    ),
+    
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 10
+    ),
+    
+    legend.position = "none",
+    
+    panel.grid.minor = element_blank()
   )
 
-p4<-p_cits2
+p4 <- p_cits2
+
 ggsave(
   filename = "graphs/p_cits_SE.png",
   plot     = p_cits2,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
 
 ggsave(
@@ -1279,30 +1747,10 @@ ggsave(
 )
 
 
-
-combinedstd<- p3 / p4 
-
-#ggsave(
-  #"graphs/SE_both.pdf",
-  #plot = combinedstd,
-  #width = 12,
-  #height = 14,
-  #units = "in",
-  #dpi = 300
-#)
+combinedstd <- p3 / p4
 
 ggsave(
   filename = "graphs/SE_both.pdf",
-  plot     = combinedstd,
-  width    = 11,
-  height   = 12,
-  units    = "in",
-  device   = cairo_pdf
-)
-
-
-ggsave(
-  filename = "graphs/SE_both.png",
   plot     = combinedstd,
   width    = 11,
   height   = 12,
@@ -1319,6 +1767,8 @@ ggsave(
   dpi      = 300
 )
 
+
+ 
 #CITS with fixed autocorelation(0.4)
 ##CITS Controlled Interrupted Time Series (CITS)
 table(perf_plot$Method)
@@ -1379,40 +1829,104 @@ ggsave(
 
 #original scale
 #log scale
-table(perf_plot$Method,useNA ="ifany")
-#perf_plotcitstrd<-perf_plot[perf_plot$Method!="CITS_0.4_constant",]
-perf_plotcitstrd<-perf_plot%>%filter(Method=="Trd"|Method=="CITS")
+table(perf_plot$Method, useNA = "ifany")
+
+# Keep only multivariable regression and CITS
+perf_plotcitstrd <- perf_plot %>%
+  filter(Method == "Trd" | Method == "CITS")
+
 p_combined_log2 <- ggplot(
   perf_plotcitstrd,
-  aes(x = n, y = Empirical_SE, colour = Method, group = Method)
+  aes(
+    x = n,
+    y = Empirical_SE,
+    colour = Method,
+    group = Method
+  )
 ) +
-  geom_line() +
-  geom_point(size = 1.5) +
+  
+  # CHANGED: slightly thicker lines for better visibility
+  # in the thesis and during presentation
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  # CHANGED: slightly larger points for readability
+  geom_point(
+    size = 2
+  ) +
+  
   facet_grid(facet_label ~ rho_f) +
+  
+  # Retain log scale because empirical SE varies substantially
+  # across simulation conditions
   scale_y_log10() +
-  scale_colour_discrete(labels = c(Trd = "Multivariable NB", CITS = "CITS")) +
+  
+  scale_colour_discrete(
+    labels = c(
+      Trd = "Multivariable NB",
+      CITS = "CITS"
+    )
+  ) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Empirical SE(log scale)",
+    
+    # CHANGED: improved spacing/formatting
+    y = "Empirical SE (log scale)",
+    
     colour = "Method"
   ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
+    
+    # ADDED: improve readability of facet labels
+    strip.text = element_text(
+      size = 9,
+      face = "bold"
+    ),
+    
+    # ADDED: improve axis-title readability
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    # ADDED: larger axis values
+    axis.text = element_text(
+      size = 10
+    ),
+    
+    # ADDED: improve legend readability
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    legend.position = "right",
+    
     panel.grid.minor = element_blank()
   )
-
 
 p_combined_log2
 
 
-#p_cits2
 ggsave(
   filename = "graphs/p_trd_SE_cits_trdCombined.png",
   plot     = p_combined_log2,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
 
 
@@ -1423,8 +1937,6 @@ ggsave(
   height   = 4.5,
   device   = cairo_pdf
 )
-
-
 ##All cits
 #perf_plotcitstrd<-perf_plot[perf_plot$Method!="CITS_0.4_constant",]
 perf_plot11<-perf_plot%>%filter(Method!="CITS_spill_3pct")
@@ -1481,124 +1993,242 @@ ggsave(
 
 ##Coverage graphs
 #coveragetrd
-p_trd_cova<- perf_plot %>%
+p_trd_cova <- perf_plot %>%
   filter(Method == "Trd") %>%
   ggplot(
     aes(
       x      = n,
       y      = coverage_pct,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
     )
-  ) +geom_hline(yintercept = 95, colour = "black", linetype = "solid", size = 0.8)+
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  ) +
+  
+  # 95% nominal coverage reference line
+  geom_hline(
+    yintercept = 95,
+    colour = "black",
+    linetype = "solid",
+    linewidth = 0.8
+  ) +
+  
+  # Slightly thicker lines for readability
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  # Slightly larger points
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Coverage(%)",
+    y = "Coverage (%)",
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = "A"
   ) +
+  
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
+    
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "right",
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
 
-p5<-p_trd_cova 
+p5 <- p_trd_cova
 
 ggsave(
   filename = "graphs/p_trd_coverage.png",
-  plot     =p_trd_cova ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  plot     = p_trd_cova,
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
-
 
 ggsave(
   filename = "graphs/p_trd_coverage.pdf",
-  plot     =p_trd_cova ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  device =cairo_pdf     # good for publication
+  plot     = p_trd_cova,
+  width    = 8,
+  height   = 4.5,
+  device   = cairo_pdf
 )
 
 
-#cits
+# CITS
 p_trd_cits <- perf_plot %>%
   filter(Method == "CITS") %>%
   ggplot(
     aes(
       x      = n,
       y      = coverage_pct,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
     )
-  ) +geom_hline(yintercept = 95, colour = "black", linetype = "solid", size = 0.8)+
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  ) +
+  
+  geom_hline(
+    yintercept = 95,
+    colour = "black",
+    linetype = "solid",
+    linewidth = 0.8
+  ) +
+  
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Coverage(%)",
+    y = "Coverage (%)",
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = "B"
   ) +
+  
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "none"
+    
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "none",
+    
+    panel.grid.minor = element_blank()
   )
 
-p6<-p_trd_cits 
+p6 <- p_trd_cits
 
 ggsave(
   filename = "graphs/p_cits_coverage.png",
-  plot     =p_trd_cits ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  plot     = p_trd_cits,
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
-
 
 ggsave(
   filename = "graphs/p_cits_coverage.pdf",
-  plot     =p_trd_cits ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  device=cairo_pdf    # good for publication
+  plot     = p_trd_cits,
+  width    = 8,
+  height   = 4.5,
+  device   = cairo_pdf
 )
 
 
-combinedcova<- p5 / p6 
+combinedcova <- p5 / p6
 
-#ggsave(
-#"graphs/SE_both.pdf",
-#plot = combinedstd,
-#width = 12,
-#height = 14,
-#units = "in",
-#dpi = 300
-#)
-##combine
 ggsave(
   filename = "graphs/cova_both.pdf",
-  plot     =combinedcova,
+  plot     = combinedcova,
   width    = 11,
   height   = 12,
   units    = "in",
   device   = cairo_pdf
 )
-
-
 
 ggsave(
   filename = "graphs/cova_both.png",
@@ -1608,10 +2238,6 @@ ggsave(
   units    = "in",
   dpi      = 300
 )
-
-
-
-
 
 
 
@@ -1631,109 +2257,223 @@ p_trd_power <- perf_plot %>%
       group  = rho_f
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +
+  
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  geom_point(
+    size = 2.2
+  ) +
+  
   geom_hline(
     yintercept = 80,
     linetype = "solid",
-    colour ="black",
+    colour = "black",
     linewidth = 0.8
   ) +
+  
   facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Power",
+    y = "Power (%)",
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = "A"
   ) +
+  
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
+    
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "right",
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
 
-p7<-p_trd_power
+p7 <- p_trd_power
 
 ggsave(
   filename = "graphs/p_trd_Power.png",
   plot     = p_trd_power,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
-
 
 ggsave(
   filename = "graphs/p_trd_Power.pdf",
   plot     = p_trd_power,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  device=cairo_pdf    # good for publication
+  width    = 8,
+  height   = 4.5,
+  device   = cairo_pdf
 )
 
 
-
-#CITS
+# CITS
 p_cits_power <- perf_plot %>%
   filter(Method == "CITS") %>%
   ggplot(
     aes(
       x      = n,
       y      = power_pct,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +geom_hline(
+  
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  geom_point(
+    size = 2.2
+  ) +
+  
+  geom_hline(
     yintercept = 80,
     linetype = "solid",
-    colour ="black",
+    colour = "black",
     linewidth = 0.8
   ) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  
+  facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Power",
+    y = "Power (%)",
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = "B"
   ) +
+  
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "none"
+    
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "none",
+    
+    panel.grid.minor = element_blank()
   )
 
-p8<-p_cits_power
+p8 <- p_cits_power
 
 ggsave(
   filename = "graphs/p_cits_power.png",
   plot     = p_cits_power,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
-
-
 
 ggsave(
   filename = "graphs/p_cits_power.pdf",
   plot     = p_cits_power,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  device=cairo_pdf    # good for publication
+  width    = 8,
+  height   = 4.5,
+  device   = cairo_pdf
 )
 
-combinedpowa<- p7 / p8
+
+combinedpowa <- p7 / p8
 
 ggsave(
   filename = "graphs/powa_both.pdf",
-  plot     =combinedpowa,
+  plot     = combinedpowa,
   width    = 11,
   height   = 12,
   units    = "in",
@@ -1750,8 +2490,6 @@ ggsave(
 )
 
 
-
-
 #MSE
 ##trd MSE
 p_trd_mse <- perf_plot %>%
@@ -1759,103 +2497,226 @@ p_trd_mse <- perf_plot %>%
   ggplot(
     aes(
       x      = n,
-      y      =MSE_estimate,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      y      = MSE_estimate,
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  
+  # Slightly stronger lines for readability and consistency
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  # Slightly larger points for thesis/presentation readability
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Mean Squared Error(MSE)",
+    y = "Mean squared error (MSE)",
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = "A"
   ) +
+  
+  # Consistent rho notation across all Objective 2 figures
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
+    
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "right",
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
 
-p9<-p_trd_mse
+p9 <- p_trd_mse
+
 
 ggsave(
   filename = "graphs/p_trd_mse.png",
-  plot     =p_trd_mse,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  plot     = p_trd_mse,
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
 
 
 ggsave(
   filename = "graphs/p_trd_mse.pdf",
-  plot     =p_trd_mse,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  device      =cairo_pdf     # good for publication
+  plot     = p_trd_mse,
+  width    = 8,
+  height   = 4.5,
+  device   = cairo_pdf
 )
 
 
-#cits
+# CITS
 p_cits_mse <- perf_plot %>%
   filter(Method == "CITS") %>%
   ggplot(
     aes(
       x      = n,
-      y      =MSE_estimate,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      y      = MSE_estimate,
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  
+  # Same line width as Panel A
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  # Same point size as Panel A
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Mean Squared Error(MSE)",
+    y = "Mean squared error (MSE)",
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = "B"
   ) +
+  
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "none"
+    
+    strip.text.y = element_text(
+      size = 8,
+      face = "bold",
+      margin = margin(t = 3, b = 3, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    # Legend shown only in Panel A
+    legend.position = "none",
+    
+    panel.grid.minor = element_blank()
   )
 
-p10<-p_cits_mse
+p10 <- p_cits_mse
+
 
 ggsave(
   filename = "graphs/p_cits_mse.png",
-  plot     =p_cits_mse,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  plot     = p_cits_mse,
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
 
 
 ggsave(
   filename = "graphs/p_cits_mse.pdf",
-  plot     =p_cits_mse,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  device = cairo_pdf    # good for publication
+  plot     = p_cits_mse,
+  width    = 8,
+  height   = 4.5,
+  device   = cairo_pdf
 )
 
-combinedmse<-p9/p10
+
+combinedmse <- p9 / p10
 
 
 ggsave(
   filename = "graphs/mse_both.pdf",
-  plot     =combinedmse,
+  plot     = combinedmse,
   width    = 12,
   height   = 14,
   units    = "in",
@@ -1865,13 +2726,12 @@ ggsave(
 
 ggsave(
   filename = "graphs/mse_both.png",
-  plot     =combinedmse,
+  plot     = combinedmse,
   width    = 12,
   height   = 14,
   units    = "in",
   dpi      = 300
 )
-
 
 ##Plotting point estimates
 ## If you saved estimates earlier:
@@ -1905,11 +2765,14 @@ est_plot <- estimates %>%
 ## 2. Scenario labels + true effects (fix facet order here)
 scenario_labels <- est_plot %>%
   distinct(EstimandScenario, true_B) %>%
-  arrange(EstimandScenario) %>%   # ensures Small, Moderate, Large
+  arrange(EstimandScenario) %>%
   mutate(
-    facet_label = paste0(EstimandScenario, " (", round(true_B, 4), ")"),
+    facet_label = paste0(
+      EstimandScenario, " (", round(true_B, 4), ")"
+    ),
     facet_label = factor(facet_label, levels = facet_label)
   )
+
 
 ## This will also be used for the dashed lines
 true_lines <- scenario_labels
@@ -1940,23 +2803,36 @@ p_trd_ridge <- ggplot(
   geom_density_ridges(
     scale          = 1.2,
     rel_min_height = 0.001,
-    size           =1,
-    alpha          = 0.7
+    
+    # CHANGED: thinner outline to reduce crowding
+    linewidth      = 0.6,
+    
+    # CHANGED: slightly more transparent for overlapping densities
+    alpha          = 0.6
   ) +
+  
   geom_vline(
     data        = true_lines,
     aes(xintercept = true_B),
     linetype    = "dashed",
     colour      = "black",
-    inherit.aes = FALSE
+    
+    # CHANGED: clearer true-effect reference line
+    linewidth   = 0.7
   ) +
+  
   facet_grid(. ~ facet_label) +
+  
+  # ADDED: same x-axis range as CITS for fair visual comparison
+  coord_cartesian(xlim = c(-2, 2)) +
+  
   labs(
-    title  = "A",
-    x      =NULL,
-    y      = "Length of time series (n)"
-    #colour = "Autocorrelation (ρ)"
-  ) +scale_colour_discrete(
+    title = "A",
+    x     = NULL,
+    y     = "Time-series length (n)"
+  ) +
+  
+  scale_colour_discrete(
     labels = c(
       expression(rho == 0.0),
       expression(rho == 0.2),
@@ -1965,20 +2841,39 @@ p_trd_ridge <- ggplot(
       expression(rho == 0.8)
     ),
     name = expression("Autocorrelation (" * rho * ")")
-  )+
+  ) +
+  
   ggridges::theme_ridges() +
+  
   theme(
-    legend.position  = "none",
+    legend.position = "none",
+    
     strip.background = element_rect(fill = "grey95"),
-    strip.text       = element_text(size = 11, face = "bold"),  # smaller labels
-    panel.grid.minor = element_blank(),
-    axis.title.x     = element_text(hjust = 0.5, vjust = -0.5) 
+    
+    # CHANGED: slightly cleaner facet labels
+    strip.text = element_text(
+      size = 10,
+      face = "bold",
+      margin = margin(t = 3, b = 4)
+    ),
+    
+    # ADDED: prevents letters such as g from being clipped
+    strip.clip = "off",
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    panel.grid.minor = element_blank()
   )
-# optional: tighten x-range if you want
-# + coord_cartesian(xlim = c(-2, 1))
 
 p_trd_ridge
-p1<-p_trd_ridge
+p1 <- p_trd_ridge
+
 ggsave(
   "graphs/Trd_ridgeline_estimates.png",
   p_trd_ridge,
@@ -2052,23 +2947,36 @@ p_trd_ridge <- ggplot(
   geom_density_ridges(
     scale          = 1.2,
     rel_min_height = 0.001,
-    size           =1,
-    alpha          = 0.7
+    
+    # CHANGED: thinner outline for consistency with Panel A
+    linewidth      = 0.6,
+    
+    # CHANGED: same transparency as Panel A
+    alpha          = 0.6
   ) +
+  
   geom_vline(
     data        = true_lines,
     aes(xintercept = true_B),
     linetype    = "dashed",
     colour      = "black",
-    inherit.aes = FALSE
+    
+    # CHANGED: clearer true-effect line
+    linewidth   = 0.7
   ) +
+  
   facet_grid(. ~ facet_label) +
+  
+  # ADDED: same x-axis range as Panel A
+  coord_cartesian(xlim = c(-2, 2)) +
+  
   labs(
-    title  = "B",
-    x      = "Estimated intervention effect (log IRR)",
-    y      = "Length of time series (n)"
-    #colour = "Autocorrelation (ρ)"
-  ) +scale_colour_discrete(
+    title = "B",
+    x     = "Estimated intervention effect (log IRR)",
+    y     = "Time-series length (n)"
+  ) +
+  
+  scale_colour_discrete(
     labels = c(
       expression(rho == 0.0),
       expression(rho == 0.2),
@@ -2077,20 +2985,50 @@ p_trd_ridge <- ggplot(
       expression(rho == 0.8)
     ),
     name = expression("Autocorrelation (" * rho * ")")
-  )+
+  ) +
+  
   ggridges::theme_ridges() +
+  
   theme(
-    legend.position  = "bottom",
+    legend.position = "bottom",
+    
     strip.background = element_rect(fill = "grey95"),
-    strip.text       = element_text(size = 11, face = "bold"),  # smaller labels
-    panel.grid.minor = element_blank(),
-    axis.title.x     = element_text(hjust = 0.5, vjust = -0.5)
+    
+    strip.text = element_text(
+      size = 10,
+      face = "bold",
+      margin = margin(t = 3, b = 4)
+    ),
+    
+    strip.clip = "off",
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
-# optional: tighten x-range if you want
-# + coord_cartesian(xlim = c(-2, 1))
 
 p_trd_ridge
-p2<-p_trd_ridge
+p2 <- p_trd_ridge
+
 ggsave(
   "graphs/CITS_ridgeline_estimates.png",
   p_trd_ridge,
@@ -2104,12 +3042,12 @@ ggsave(
   p_trd_ridge,
   width  = 8,
   height = 4.5,
-  device   = cairo_pdf
+  device = cairo_pdf
 )
 
 ##lets try doing graph combining the ridgeline_plots
 # p1 and p2 are your already-finished plots
-combined <- p1 / p2 
+combined <- p1 / p2
 
 ggsave(
   "graphs/ridgeline_both.pdf",
@@ -2128,7 +3066,6 @@ ggsave(
   units = "in",
   dpi = 300
 )
-
 
 combined2 <- plot_grid(
   p1, p2,
@@ -2241,44 +3178,120 @@ p_trd_bias <- perf_plot %>%
     aes(
       x      = n,
       y      = Bias_percent,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
+    )
+  ) +# CHANGED: slightly stronger lines for thesis readability
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  # CHANGED: slightly larger points
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
+  # ADDED: use the same y-axis range for the methods being compared
+  # so visual comparisons between A and B are fair
+  coord_cartesian(
+    ylim = range(
+      perf_plot$Bias_percent[
+        perf_plot$Method %in% c("Trd", "CITS")
+      ],
+      na.rm = TRUE
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  
   labs(
     x = "Length of time series (n)",
-    y = "Bias(%)",
+    
+    # CHANGED: clearer statistical terminology
+    y = "Percent bias (%)",
+    
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = "A"
   ) +
+  
+  # ADDED: consistent rho notation across all your simulation plots
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
+    
+    strip.text.y = element_text(
+      size = 9,
+      face = "bold",
+      margin = margin(t = 5, b = 5, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "right",
+    
+    legend.title = element_text(
+      size = 11
+    ),
+    
+    legend.text = element_text(
+      size = 10
+    ),
+    
+    panel.grid.minor = element_blank()
   )
 
-p12<-p_trd_bias 
+p12 <- p_trd_bias
 
 ggsave(
   filename = "graphs/p_trd_bias.png",
-  plot     = p_trd_bias ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  plot     = p_trd_bias,
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
 
 ggsave(
   filename = "graphs/p_trd_bias.pdf",
-  plot     = p_trd_bias ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  device = cairo_pdf    # good for publication
+  plot     = p_trd_bias,
+  width    = 8,
+  height   = 4.5,
+  device   = cairo_pdf
 )
 
 
@@ -2290,92 +3303,218 @@ p_cits_bias <- perf_plot %>%
     aes(
       x      = n,
       y      = Bias_percent,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
+    )
+  ) + geom_line(
+    linewidth = 0.7
+  ) +
+  
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
+  # SAME y-axis range as Panel A
+  coord_cartesian(
+    ylim = range(
+      perf_plot$Bias_percent[
+        perf_plot$Method %in% c("Trd", "CITS")
+      ],
+      na.rm = TRUE
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  
   labs(
     x = "Length of time series (n)",
-    y = "Bias(%)",
+    y = "Percent bias (%)",
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = "B"
   ) +
+  
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "none"
+    
+    strip.text.y = element_text(
+      size = 9,
+      face = "bold",
+      margin = margin(t = 5, b = 5, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    # Keep no legend here because Panel A already contains it
+    legend.position = "none",
+    
+    panel.grid.minor = element_blank()
   )
 
-p13<-p_cits_bias 
+p13 <- p_cits_bias
 
 ggsave(
   filename = "graphs/p_cits_bias.png",
-  plot     = p_cits_bias ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  plot     = p_cits_bias,
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
 
 ggsave(
   filename = "graphs/p_cits_bias.pdf",
-  plot     = p_cits_bias ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  device=cairo_pdf     # good for publication
+  plot     = p_cits_bias,
+  width    = 8,
+  height   = 4.5,
+  device   = cairo_pdf
 )
 
 ##CITS with constant corelation
 table(perf_plot$Method)
+
 p_cits_bias <- perf_plot %>%
   filter(Method == "CITS_0.4_constant") %>%
   ggplot(
     aes(
       x      = n,
       y      = Bias_percent,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  
+  # CHANGED: slightly thicker lines for consistency
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  # CHANGED: slightly larger points for readability
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Bias(%)",
+    
+    # CHANGED: clearer wording
+    y = "Percent bias (%)",
+    
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = "C"
   ) +
+  
+  # ADDED: consistent rho labels
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  # ADDED: matching shape labels
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "none"
+    
+    # CHANGED: improve facet-label readability
+    strip.text.y = element_text(
+      size = 9,
+      face = "bold",
+      margin = margin(t = 5, b = 5, r = 6, l = 6)
+    ),
+    
+    # ADDED: explicit axis-title size
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    # ADDED: larger tick labels
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "none",
+    
+    panel.grid.minor = element_blank()
   )
 
-p14<-p_cits_bias 
+p14 <- p_cits_bias
 
 ggsave(
   filename = "graphs/p_citsrho0.4_bias.png",
-  plot     = p_cits_bias ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  plot     = p_cits_bias,
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
 
 ggsave(
   filename = "graphs/p_citsrho0.4_bias.pdf",
-  plot     = p_cits_bias ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  device=cairo_pdf     # good for publication
+  plot     = p_cits_bias,
+  width    = 8,
+  height   = 4.5,
+  device   = cairo_pdf
 )
 
 
@@ -2385,45 +3524,105 @@ p_cits_bias1 <- perf_plot %>%
     aes(
       x      = n,
       y      = Bias_percent,
-      colour = rho_f,     # colour by rho (nice formatted labels)
-      shape  = rho_f,     # different point shapes per rho
-      group  = rho_f      # one line per rho
+      colour = rho_f,
+      shape  = rho_f,
+      group  = rho_f
     )
   ) +
-  geom_line() +
-  geom_point(size = 2) +
-  facet_grid(facet_label ~ .) +   # 3 rows, 1 column
+  
+  # CHANGED: same line thickness as the other bias plots
+  geom_line(
+    linewidth = 0.7
+  ) +
+  
+  # CHANGED: same point size as the other bias plots
+  geom_point(
+    size = 2.2
+  ) +
+  
+  facet_grid(facet_label ~ .) +
+  
   labs(
     x = "Length of time series (n)",
-    y = "Bias(%)",
+    
+    # CHANGED: clearer wording
+    y = "Percent bias (%)",
+    
     colour = "Autocorrelation (ρ)",
     shape  = "Autocorrelation (ρ)",
     title = ""
   ) +
+  
+  # ADDED: consistent rho labels
+  scale_colour_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
+  # ADDED: matching shape labels
+  scale_shape_discrete(
+    labels = c(
+      expression(rho == 0.0),
+      expression(rho == 0.2),
+      expression(rho == 0.4),
+      expression(rho == 0.6),
+      expression(rho == 0.8)
+    ),
+    name = expression("Autocorrelation (" * rho * ")")
+  ) +
+  
   theme_bw() +
+  
   theme(
     strip.background = element_rect(fill = "grey95"),
-    panel.grid.minor = element_blank(),
-    legend.position = "none"
+    
+    # CHANGED: same facet-strip formatting as above
+    strip.text.y = element_text(
+      size = 9,
+      face = "bold",
+      margin = margin(t = 5, b = 5, r = 6, l = 6)
+    ),
+    
+    axis.title.x = element_text(
+      size = 12,
+      hjust = 0.5
+    ),
+    
+    axis.title.y = element_text(
+      size = 12
+    ),
+    
+    axis.text = element_text(
+      size = 11
+    ),
+    
+    legend.position = "none",
+    
+    panel.grid.minor = element_blank()
   )
 
 
 ggsave(
   filename = "graphs/p_citsrho0.4_bias1.png",
-  plot     = p_cits_bias1 ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  dpi      = 300     # good for publication
+  plot     = p_cits_bias1,
+  width    = 8,
+  height   = 4.5,
+  dpi      = 300
 )
 
 ggsave(
   filename = "graphs/p_citsrho0.4_bias1.pdf",
-  plot     = p_cits_bias1 ,
-  width    = 8,      # inches
-  height   = 4.5,    # adjust as you like
-  device=cairo_pdf     # good for publication
+  plot     = p_cits_bias1,
+  width    = 8,
+  height   = 4.5,
+  device   = cairo_pdf
 )
-
 
 #combine
 combinedBiased<- p12 / p13 / p14
@@ -2492,9 +3691,9 @@ perf_clean <- perf %>%
     
     # dynamic labels with true_val (same idea as your facet_label)
     effect_label = case_when(
-      EstimandScenario == "Small"    ~ paste0("Small(",    round(true_val, 4), ")"),
-      EstimandScenario == "Moderate" ~ paste0("Moderate(", round(true_val, 4), ")"),
-      EstimandScenario == "Large"    ~ paste0("Large(",    round(true_val, 4), ")"),
+      EstimandScenario == "Small"    ~ paste0("Small (",    round(true_val, 4), ")"),
+      EstimandScenario == "Moderate" ~ paste0("Moderate (", round(true_val, 4), ")"),
+      EstimandScenario == "Large"    ~ paste0("Large (",    round(true_val, 4), ")"),
       TRUE ~ as.character(EstimandScenario)
     )
   )
@@ -2531,7 +3730,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -2611,7 +3810,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -2690,7 +3889,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -2774,7 +3973,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -2855,7 +4054,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
@@ -2934,7 +4133,7 @@ table_bias_empse
 
 
 rho_seq    <- c("0.0", "0.2", "0.4", "0.6", "0.8")
-effects    <- c("Small(-0.0408)", "Moderate(-0.3567)", "Large(-0.5108)")
+effects    <- c("Small (-0.0408)", "Moderate (-0.3567)", "Large (-0.5108)")
 
 col_order <- c(
   "n", "Method",
