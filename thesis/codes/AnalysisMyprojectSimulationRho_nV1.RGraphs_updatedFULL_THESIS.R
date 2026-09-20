@@ -4180,3 +4180,960 @@ write.csv(pretty_table,
 
 
 
+##OBjective1 thesis
+ ##Bias of estimated intervebntion effect(percent bias and ridgeline plot)
+est_trd <- est_plot %>%filter(Method == "CITS_spill_3pct")
+est_trd<-est_trd%>%arrange(true_B,rho,n)%>%select(true_B,estimate,rho,n,everything())
+#library(dplyr)
+
+bias_dat<-est_trd
+
+bias_dat <-bias_dat%>%
+  mutate(
+    bias = estimate - true_B,
+    abs_bias = abs(bias),
+    pct_bias = 100 * abs(bias / true_B)
+  )
+
+abs_bias_effect <- bias_dat %>%
+  group_by(EstimandScenario) %>%
+  summarise(
+    mean_abs_bias =round(mean(abs_bias, na.rm = TRUE),2),
+    sd_abs_bias =round(sd(abs_bias, na.rm = TRUE),2),
+    mean_estimate=round(mean(estimate,na.rm=TRUE),2),
+    .groups = "drop"
+  )
+
+abs_bias_effect
+
+
+p_trd_biasNHJ<- perf_plot %>%filter(Method == "CITS_spill_3pct")
+p_trd_biasNHJ<-p_trd_biasNHJ%>%arrange(true_val,rho,n)%>%select(true_val,B_hat,Bias,rho,n,everything())
+
+bs_bias_effect1 <- p_trd_biasNHJ %>%
+  group_by(EstimandScenario) %>%
+  summarise(
+    mean_abs_bias =round(mean(Bias, na.rm = TRUE),2),
+    mcse_bias=round(mean(MCSE_Bias, na.rm = TRUE),3),
+    mean_percent_Bias=round(mean(Bias_percent,na.rm =TRUE),2),
+    mean_estimate=round(mean(B_hat,na.rm=TRUE),4),
+    Empirical_estimate=round(mean(Empirical_SE,na.rm=TRUE),3),
+    .groups = "drop"
+  )
+
+bs_bias_effect1
+
+
+
+bias_by_rho <- p_trd_biasNHJ %>%
+  group_by(EstimandScenario,rho) %>%
+  summarise(
+    mean_abs_bias =round(mean(Bias, na.rm = TRUE),2),
+    mcse_bias=round(mean(MCSE_Bias, na.rm = TRUE),3),
+    mean_percent_Bias=round(mean(Bias_percent,na.rm =TRUE),2),
+    mean_estimate=round(mean(B_hat,na.rm=TRUE),4),
+    Empirical_estimateSE=round(mean(Empirical_SE,na.rm=TRUE),3),
+    .groups = "drop"
+  )
+
+bias_by_rho
+bias_by_rho$Empirical_estimateSE
+
+
+bias_by_n <- p_trd_biasNHJ %>%
+  group_by(EstimandScenario,n) %>%
+  summarise(
+    mean_abs_bias =round(mean(Bias, na.rm = TRUE),2),
+    mcse_bias=round(mean(MCSE_Bias, na.rm = TRUE),3),
+    mean_percent_Bias=round(mean(Bias_percent,na.rm =TRUE),2),
+    mean_estimate=round(mean(B_hat,na.rm=TRUE),4),
+    Empirical_estimateSE=round(mean(Empirical_SE,na.rm=TRUE),3),
+    .groups = "drop"
+  )
+
+bias_by_n
+bias_by_n$Empirical_estimateSE
+
+
+bias_by_n %>%
+  filter(
+    EstimandScenario == "Moderate",
+    n %in% c(12, 150)
+  )
+
+
+#Empirical vs modelbased SE
+se_by_rho <- p_trd_biasNHJ %>%
+  filter(EstimandScenario == "Moderate") %>%
+  group_by(rho) %>%
+  summarise(
+    mean_empirical_SE = round(mean(Empirical_SE, na.rm = TRUE), 3),
+    mean_model_SE = round(mean(avg_model_SE, na.rm = TRUE), 3),
+    mean_SE_ratio = round(mean(ratio_Emp_ModelSE, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+se_by_rho
+
+
+se_by_rho %>%
+  filter(rho %in% c(0, 0.4, 0.8))
+
+
+
+se_by_n <- p_trd_biasNHJ %>%
+  filter(
+    EstimandScenario == "Moderate",
+    rho %in% c(0.4, 0.8),
+    n %in% c(12, 150)
+  ) %>%
+  select(
+    rho,
+    n,
+    Empirical_SE,
+    avg_model_SE,
+    ratio_Emp_ModelSE
+  ) %>%
+  arrange(rho, n) %>%
+  mutate(
+    Empirical_SE = round(Empirical_SE, 3),
+    avg_model_SE = round(avg_model_SE, 3),
+    ratio_Emp_ModelSE = round(ratio_Emp_ModelSE, 2)
+  )
+
+se_by_n
+
+
+se_by_effect_rho <- p_trd_biasNHJ %>%
+  filter(rho %in% c(0, 0.4, 0.8)) %>%
+  group_by(EstimandScenario, rho) %>%
+  summarise(
+    mean_empirical_SE = round(mean(Empirical_SE, na.rm = TRUE), 3),
+    mean_model_SE = round(mean(avg_model_SE, na.rm = TRUE), 3),
+    mean_SE_ratio = round(mean(ratio_Emp_ModelSE, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+se_by_effect_rho
+
+
+
+
+##Coverage
+
+coverage_values <- p_trd_biasNHJ %>%
+  filter(
+    EstimandScenario == "Moderate",
+    rho %in% c(0, 0.4, 0.8),
+    n %in% c(12, 80, 150)
+  ) %>%
+  select(
+    rho,
+    n,
+    coverage_pct,
+    MCSE_cov_pct
+  ) %>%
+  arrange(rho, n) %>%
+  mutate(
+    coverage_pct = round(coverage_pct, 2),
+    MCSE_cov_pct = round(MCSE_cov_pct, 2)
+  )
+
+coverage_values
+
+#POWER
+power_by_effect <- p_trd_biasNHJ %>%
+  group_by(EstimandScenario) %>%
+  summarise(
+    mean_power = round(mean(power_pct, na.rm = TRUE), 2),
+    min_power  = round(min(power_pct, na.rm = TRUE), 2),
+    max_power  = round(max(power_pct, na.rm = TRUE), 2),
+    mean_MCSE  = round(mean(MCSE_power_pct, na.rm = TRUE), 3),
+    .groups = "drop"
+  )
+
+power_by_effect
+
+
+power_moderate <- p_trd_biasNHJ %>%
+  filter(
+    EstimandScenario == "Moderate",
+    rho %in% c(0, 0.4, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  select(
+    rho,
+    n,
+    power_pct,
+    MCSE_power_pct
+  ) %>%
+  arrange(rho, n) %>%
+  mutate(
+    power_pct = round(power_pct, 2),
+    MCSE_power_pct = round(MCSE_power_pct, 3)
+  )
+
+power_moderate
+
+
+power_threshold <- p_trd_biasNHJ %>%
+  group_by(EstimandScenario, rho) %>%
+  summarise(
+    first_n_80 = ifelse(
+      any(power_pct >= 80, na.rm = TRUE),
+      min(n[power_pct >= 80], na.rm = TRUE),
+      NA
+    ),
+    .groups = "drop"
+  )
+
+power_threshold
+
+
+#mse
+## =========================================================
+## MSE summaries for quantitative interpretation
+## =========================================================
+
+# 1. Overall MSE by intervention effect size
+mse_by_effect <- p_trd_biasNHJ %>%
+  group_by(EstimandScenario) %>%
+  summarise(
+    mean_MSE = round(mean(MSE_estimate, na.rm = TRUE), 3),
+    min_MSE  = round(min(MSE_estimate, na.rm = TRUE), 3),
+    max_MSE  = round(max(MSE_estimate, na.rm = TRUE), 3),
+    mean_MCSE_MSE = round(mean(MCSE_MSE, na.rm = TRUE), 3),
+    .groups = "drop"
+  )
+
+mse_by_effect
+
+
+# 2. Moderate effect: selected autocorrelation levels and series lengths
+mse_moderate <- p_trd_biasNHJ %>%
+  filter(
+    EstimandScenario == "Moderate",
+    rho %in% c(0, 0.4, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  select(
+    rho,
+    n,
+    MSE_estimate,
+    MCSE_MSE
+  ) %>%
+  arrange(rho, n) %>%
+  mutate(
+    MSE_estimate = round(MSE_estimate, 3),
+    MCSE_MSE = round(MCSE_MSE, 3)
+  )
+
+mse_moderate
+
+
+# 3. Compare effect sizes at short and long series
+mse_effect_compare <- p_trd_biasNHJ %>%
+  filter(
+    rho %in% c(0, 0.4, 0.8),
+    n %in% c(12, 150)
+  ) %>%
+  select(
+    EstimandScenario,
+    rho,
+    n,
+    MSE_estimate,
+    MCSE_MSE
+  ) %>%
+  arrange(EstimandScenario, rho, n) %>%
+  mutate(
+    MSE_estimate = round(MSE_estimate, 3),
+    MCSE_MSE = round(MCSE_MSE, 3)
+  )
+
+mse_effect_compare
+
+
+
+
+
+##Objective 2:CITS vs multivariable regression method
+
+## =========================================================
+## Objective 2: Bias summaries for CITS vs Multivariable
+## =========================================================
+
+p_compare <- perf_plot %>%
+  filter(Method %in% c("Trd", "CITS")) %>%
+  arrange(Method, true_val, rho, n)
+
+
+## 1. Mean estimate and mean bias by method and effect size
+bias_ridge_compare <- p_compare %>%
+  group_by(Method, EstimandScenario) %>%
+  summarise(
+    true_effect   = round(first(true_val), 4),
+    mean_estimate = round(mean(B_hat, na.rm = TRUE), 4),
+    mean_bias     = round(mean(Bias, na.rm = TRUE), 2),
+    MCSE_bias     = round(mean(MCSE_Bias, na.rm = TRUE), 3),
+    .groups = "drop"
+  )
+
+
+bias_ridge_compare %>%
+  mutate(
+    true_effect = sprintf("%.4f", true_effect),
+    mean_estimate = sprintf("%.4f", mean_estimate),
+    mean_bias = sprintf("%.2f", mean_bias),
+    MCSE_bias = sprintf("%.3f", MCSE_bias)
+  )
+## 2. Bias by method, effect size and autocorrelation
+## This checks whether the apparent centring changes as rho increases
+bias_ridge_rho <- p_compare %>%
+  group_by(Method, EstimandScenario, rho) %>%
+  summarise(
+    mean_estimate = round(mean(B_hat, na.rm = TRUE), 4),
+    mean_bias     = round(mean(Bias, na.rm = TRUE), 2),
+    MCSE_bias     = round(mean(MCSE_Bias, na.rm = TRUE), 3),
+    .groups = "drop"
+  )
+
+bias_ridge_rho
+
+
+##percent bias
+## =========================================================
+## OBJECTIVE 2: PERCENT BIAS
+## Multivariable regression versus CITS
+## =========================================================
+
+p_compare_bias <- perf_plot %>%
+  filter(Method %in% c("Trd", "CITS"))
+
+
+## 1. Overall percent bias by method and intervention effect
+percent_bias_effect <- p_compare_bias %>%
+  group_by(Method, EstimandScenario) %>%
+  summarise(
+    mean_percent_bias = round(mean(Bias_percent, na.rm = TRUE), 2),
+    min_percent_bias  = round(min(Bias_percent, na.rm = TRUE), 2),
+    max_percent_bias  = round(max(Bias_percent, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+percent_bias_effect
+
+
+## 2. Percent bias by method, effect size and autocorrelation
+percent_bias_rho <- p_compare_bias %>%
+  group_by(Method, EstimandScenario, rho) %>%
+  summarise(
+    mean_percent_bias = round(mean(Bias_percent, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+percent_bias_rho
+
+
+## 3. Selected values for the SMALL effect
+## This is where the methods appear to differ most
+percent_bias_small <- p_compare_bias %>%
+  filter(
+    EstimandScenario == "Small",
+    rho %in% c(0, 0.4, 0.6, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  select(
+    Method,
+    rho,
+    n,
+    Bias_percent
+  ) %>%
+  arrange(Method, rho, n) %>%
+  mutate(
+    Bias_percent = round(Bias_percent, 2)
+  )
+
+percent_bias_small
+
+
+## 4. Moderate and large effects:
+## compact overall comparison by method
+percent_bias_modlarge <- p_compare_bias %>%
+  filter(EstimandScenario %in% c("Moderate", "Large")) %>%
+  group_by(Method, EstimandScenario) %>%
+  summarise(
+    mean_percent_bias = round(mean(Bias_percent, na.rm = TRUE), 2),
+    max_percent_bias  = round(max(Bias_percent, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+percent_bias_modlarge
+
+
+
+
+
+  ##SENSITIVITY
+## =========================================================
+## SENSITIVITY ANALYSIS
+## Standard CITS versus control rho fixed at 0.4
+## =========================================================
+
+p_sensitivity <- perf_plot %>%
+  filter(Method %in% c("CITS", "CITS_0.4_constant"))
+
+
+## 1. Overall percent bias by method and effect size
+sensitivity_effect <- p_sensitivity %>%
+  group_by(Method, EstimandScenario) %>%
+  summarise(
+    mean_percent_bias = round(mean(Bias_percent, na.rm = TRUE), 2),
+    min_percent_bias  = round(min(Bias_percent, na.rm = TRUE), 2),
+    max_percent_bias  = round(max(Bias_percent, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+sensitivity_effect
+
+
+## 2. Percent bias by outcome autocorrelation
+sensitivity_rho <- p_sensitivity %>%
+  group_by(Method, EstimandScenario, rho) %>%
+  summarise(
+    mean_percent_bias = round(mean(Bias_percent, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+sensitivity_rho
+
+
+## 3. Direct comparison at selected series lengths
+sensitivity_selected <- p_sensitivity %>%
+  filter(
+    rho %in% c(0, 0.4, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  select(
+    Method,
+    EstimandScenario,
+    rho,
+    n,
+    Bias_percent
+  ) %>%
+  arrange(EstimandScenario, rho, n, Method) %>%
+  mutate(
+    Bias_percent = round(Bias_percent, 2)
+  )
+
+sensitivity_selected
+
+
+
+##Empirical vs model based standard error
+ ##Empirical standard error
+
+## =========================================================
+## Objective 2: Empirical standard error
+## CITS versus multivariable regression
+## =========================================================
+
+se_compare <- perf_plot %>%
+  filter(Method %in% c("Trd", "CITS"))
+
+
+## 1. Overall empirical SE by method and effect size
+se_by_effect <- se_compare %>%
+  group_by(Method, EstimandScenario) %>%
+  summarise(
+    mean_emp_SE = round(mean(Empirical_SE, na.rm = TRUE), 3),
+    min_emp_SE  = round(min(Empirical_SE, na.rm = TRUE), 3),
+    max_emp_SE  = round(max(Empirical_SE, na.rm = TRUE), 3),
+    .groups = "drop"
+  )
+
+se_by_effect
+
+
+## 2. Moderate effect:
+## empirical SE by autocorrelation
+se_moderate_rho <- se_compare %>%
+  filter(EstimandScenario == "Moderate") %>%
+  group_by(Method, rho) %>%
+  summarise(
+    mean_emp_SE = round(mean(Empirical_SE, na.rm = TRUE), 3),
+    .groups = "drop"
+  )
+
+se_moderate_rho
+
+
+## 3. Moderate effect at selected series lengths
+se_moderate_selected <- se_compare %>%
+  filter(
+    EstimandScenario == "Moderate",
+    rho %in% c(0, 0.4, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  select(
+    Method,
+    rho,
+    n,
+    Empirical_SE
+  ) %>%
+  arrange(rho, n, Method) %>%
+  mutate(
+    Empirical_SE = round(Empirical_SE, 3)
+  )
+
+se_moderate_selected
+
+
+## 4. Direct CITS / multivariable empirical-SE ratio
+## Values < 1 indicate smaller empirical SE for CITS
+se_ratio <- se_compare %>%
+  filter(EstimandScenario == "Moderate") %>%
+  select(Method, rho, n, Empirical_SE) %>%
+  tidyr::pivot_wider(
+    names_from = Method,
+    values_from = Empirical_SE
+  ) %>%
+  mutate(
+    CITS_to_MV_ratio = round(CITS / Trd, 2)
+  ) %>%
+  filter(
+    rho %in% c(0, 0.4, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  arrange(rho, n)
+
+se_ratio
+
+
+
+
+## =========================================================
+## Objective 2:
+## Empirical versus model-based SE
+## Multivariable regression versus CITS
+## =========================================================
+
+se_alignment <- perf_plot %>%
+  filter(Method %in% c("Trd", "CITS"))
+
+
+## 1. Overall empirical and model-based SE by method/effect size
+se_alignment_effect <- se_alignment %>%
+  group_by(Method, EstimandScenario) %>%
+  summarise(
+    mean_emp_SE   = round(mean(Empirical_SE, na.rm = TRUE), 3),
+    mean_model_SE = round(mean(avg_model_SE, na.rm = TRUE), 3),
+    mean_ratio    = round(mean(ratio_Emp_ModelSE, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+se_alignment_effect
+
+
+## 2. Moderate effect by autocorrelation
+se_alignment_rho <- se_alignment %>%
+  filter(EstimandScenario == "Moderate") %>%
+  group_by(Method, rho) %>%
+  summarise(
+    mean_emp_SE   = round(mean(Empirical_SE, na.rm = TRUE), 3),
+    mean_model_SE = round(mean(avg_model_SE, na.rm = TRUE), 3),
+    mean_ratio    = round(mean(ratio_Emp_ModelSE, na.rm = TRUE), 2),
+    .groups = "drop"
+  )
+
+se_alignment_rho
+
+
+## 3. Moderate effect at selected series lengths
+se_alignment_selected <- se_alignment %>%
+  filter(
+    EstimandScenario == "Moderate",
+    rho %in% c(0, 0.4, 0.6, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  select(
+    Method,
+    rho,
+    n,
+    Empirical_SE,
+    avg_model_SE,
+    ratio_Emp_ModelSE
+  ) %>%
+  arrange(Method, rho, n) %>%
+  mutate(
+    Empirical_SE      = round(Empirical_SE, 3),
+    avg_model_SE      = round(avg_model_SE, 3),
+    ratio_Emp_ModelSE = round(ratio_Emp_ModelSE, 2)
+  )
+
+se_alignment_selected
+
+
+
+
+
+
+## Sensitivity analysis:
+## Empirical SE for standard CITS versus CITS with control rho fixed at 0.4
+
+se_sensitivity <- perf_plot %>%
+  filter(Method %in% c("CITS", "CITS_0.4_constant"))
+
+## 1. Moderate effect by outcome autocorrelation
+se_sensitivity_rho <- se_sensitivity %>%
+  filter(EstimandScenario == "Moderate") %>%
+  group_by(Method, rho) %>%
+  summarise(
+    mean_emp_SE = round(mean(Empirical_SE, na.rm = TRUE), 3),
+    .groups = "drop"
+  )
+
+se_sensitivity_rho
+
+
+## 2. Moderate effect at selected series lengths
+se_sensitivity_selected <- se_sensitivity %>%
+  filter(
+    EstimandScenario == "Moderate",
+    rho %in% c(0, 0.4, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  select(
+    Method,
+    rho,
+    n,
+    Empirical_SE
+  ) %>%
+  arrange(rho, n, Method) %>%
+  mutate(
+    Empirical_SE = round(Empirical_SE, 3)
+  )
+
+se_sensitivity_selected
+
+
+
+
+##Coverage
+
+## =========================================================
+## Coverage comparison: CITS vs Multivariable regression
+## =========================================================
+
+## =========================================================
+## COVERAGE COMPARISON: CITS VS MULTIVARIABLE REGRESSION
+## =========================================================
+
+library(dplyr)
+
+## Keep only the two main methods
+coverage_dat <- perf_plot %>%
+  filter(Method %in% c("Trd", "CITS"))
+
+
+## ---------------------------------------------------------
+## 1. Overall coverage by method and intervention effect size
+## ---------------------------------------------------------
+
+coverage_effect <- coverage_dat %>%
+  group_by(Method, EstimandScenario) %>%
+  summarise(
+    mean_coverage = round(mean(coverage_pct, na.rm = TRUE), 2),
+    min_coverage  = round(min(coverage_pct, na.rm = TRUE), 2),
+    max_coverage  = round(max(coverage_pct, na.rm = TRUE), 2),
+    .groups = "drop"
+  ) %>%
+  as.data.frame()
+
+coverage_effect
+
+
+## ---------------------------------------------------------
+## 2. Mean coverage by method, effect size and autocorrelation
+## ---------------------------------------------------------
+
+coverage_rho <- coverage_dat %>%
+  group_by(Method, EstimandScenario, rho) %>%
+  summarise(
+    mean_coverage = round(mean(coverage_pct, na.rm = TRUE), 2),
+    .groups = "drop"
+  ) %>%
+  arrange(EstimandScenario, rho, Method) %>%
+  as.data.frame()
+
+coverage_rho
+
+
+## ---------------------------------------------------------
+## 3. Coverage at selected series lengths
+## ---------------------------------------------------------
+
+coverage_selected <- coverage_dat %>%
+  filter(
+    rho %in% c(0, 0.4, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  select(
+    Method,
+    EstimandScenario,
+    rho,
+    n,
+    coverage_pct
+  ) %>%
+  arrange(
+    EstimandScenario,
+    rho,
+    n,
+    Method
+  ) %>%
+  mutate(
+    coverage_pct = round(coverage_pct, 2)
+  ) %>%
+  as.data.frame()
+
+coverage_selected
+
+
+
+
+##power
+## =========================================================
+## POWER COMPARISON: CITS VS MULTIVARIABLE REGRESSION
+## =========================================================
+
+library(dplyr)
+
+## Keep only the two main methods
+power_dat <- perf_plot %>%
+  filter(Method %in% c("Trd", "CITS"))
+
+
+## ---------------------------------------------------------
+## 1. Overall power by method and intervention effect size
+## ---------------------------------------------------------
+
+power_effect <- power_dat %>%
+  group_by(Method, EstimandScenario) %>%
+  summarise(
+    mean_power = round(mean(power_pct, na.rm = TRUE), 2),
+    min_power  = round(min(power_pct, na.rm = TRUE), 2),
+    max_power  = round(max(power_pct, na.rm = TRUE), 2),
+    .groups = "drop"
+  ) %>%
+  as.data.frame()
+
+power_effect
+
+
+## ---------------------------------------------------------
+## 2. Mean power by method, effect size and autocorrelation
+## ---------------------------------------------------------
+
+power_rho <- power_dat %>%
+  group_by(Method, EstimandScenario, rho) %>%
+  summarise(
+    mean_power = round(mean(power_pct, na.rm = TRUE), 2),
+    .groups = "drop"
+  ) %>%
+  arrange(EstimandScenario, rho, Method) %>%
+  as.data.frame()
+
+power_rho
+
+
+## ---------------------------------------------------------
+## 3. Power at selected series lengths
+## ---------------------------------------------------------
+
+power_selected <- power_dat %>%
+  filter(
+    rho %in% c(0, 0.2, 0.4, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  select(
+    Method,
+    EstimandScenario,
+    rho,
+    n,
+    power_pct
+  ) %>%
+  arrange(
+    EstimandScenario,
+    rho,
+    n,
+    Method
+  ) %>%
+  mutate(
+    power_pct = round(power_pct, 2)
+  ) %>%
+  as.data.frame()
+
+power_selected
+
+
+
+## =========================================================
+## MSE COMPARISON: CITS VS MULTIVARIABLE REGRESSION
+## =========================================================
+
+library(dplyr)
+
+## Keep only the two main methods
+mse_dat <- perf_plot %>%
+  filter(Method %in% c("Trd", "CITS"))
+
+
+## ---------------------------------------------------------
+## 1. Overall MSE by method and intervention effect size
+## ---------------------------------------------------------
+
+mse_effect <- mse_dat %>%
+  group_by(Method, EstimandScenario) %>%
+  summarise(
+    mean_MSE = round(mean(MSE_estimate, na.rm = TRUE), 3),
+    min_MSE  = round(min(MSE_estimate, na.rm = TRUE), 3),
+    max_MSE  = round(max(MSE_estimate, na.rm = TRUE), 3),
+    .groups = "drop"
+  ) %>%
+  as.data.frame()
+
+mse_effect
+
+
+## ---------------------------------------------------------
+## 2. Mean MSE by method, effect size and autocorrelation
+## ---------------------------------------------------------
+
+mse_rho <- mse_dat %>%
+  group_by(Method, EstimandScenario, rho) %>%
+  summarise(
+    mean_MSE = round(mean(MSE_estimate, na.rm = TRUE), 3),
+    .groups = "drop"
+  ) %>%
+  arrange(EstimandScenario, rho, Method) %>%
+  as.data.frame()
+
+mse_rho
+
+
+## ---------------------------------------------------------
+## 3. MSE at selected series lengths
+## ---------------------------------------------------------
+
+mse_selected <- mse_dat %>%
+  filter(
+    rho %in% c(0, 0.2, 0.4, 0.8),
+    n %in% c(12, 40, 80, 150)
+  ) %>%
+  select(
+    Method,
+    EstimandScenario,
+    rho,
+    n,
+    MSE_estimate
+  ) %>%
+  arrange(
+    EstimandScenario,
+    rho,
+    n,
+    Method
+  ) %>%
+  mutate(
+    MSE_estimate = round(MSE_estimate, 3)
+  ) %>%
+  as.data.frame()
+
+mse_selected
+
+
+
+
+
+
+
+
+
+
+
+
+##Abstract extract
+##uNDER CONTAMINATION
+p_trd_biasNHJ<- perf_plot %>%filter(Method == "CITS_spill_3pct")
+summary_bias <- p_trd_biasNHJ %>%
+  group_by(EstimandScenario) %>%
+  summarise(
+    mean_percent_bias = round(mean(Bias_percent, na.rm = TRUE),2),
+    sd_percent_bias   = round(sd(Bias_percent, na.rm = TRUE),2)
+  )
+
+summary_bias
+
+p_trd_biasNHJ1 <- perf_plot %>% 
+  filter(Method == "CITS_spill_3pct") %>% 
+  mutate(
+    autocorrelation_group = case_when(
+      rho <= 0.4 ~ "Low-to-moderate (rho <= 0.4)",
+      rho == 0.8 ~ "High (rho = 0.8)",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  filter(!is.na(autocorrelation_group))
+
+summary_performance <- p_trd_biasNHJ1 %>% 
+  group_by(
+    EstimandScenario,
+    autocorrelation_group
+  ) %>% 
+  summarise(
+    mean_percent_bias = round(
+      mean(Bias_percent, na.rm = TRUE), 2
+    ),
+    
+    sd_percent_bias = round(
+      sd(Bias_percent, na.rm = TRUE), 2
+    ),
+    
+    mean_coverage = round(
+      mean(coverage_pct, na.rm = TRUE), 2
+    ),
+    
+    mean_empirical_SE = round(
+      mean(Empirical_SE, na.rm = TRUE), 3
+    ),
+    
+    .groups = "drop"
+  )
+
+summary_performance
+
+
+
+#cits VS MULTIVARIABLE
+perf_plot %>%
+  filter(
+    Method %in% c("Trd", "CITS"),
+    EstimandScenario == "Moderate",
+    rho %in% c(0, 0.2, 0.4, 0.8)
+  ) %>%
+  mutate(
+    autocorrelation = case_when(
+      rho <= 0.4 ~ "Low-to-moderate autocorrelation",
+      rho == 0.8 ~ "Strong autocorrelation"
+    )
+  ) %>%
+  group_by(Method, autocorrelation) %>%
+  summarise(
+    mean_bias = mean(Bias_percent, na.rm = TRUE),
+    sd_bias = sd(Bias_percent, na.rm = TRUE),
+    min_bias = min(Bias_percent, na.rm = TRUE),
+    max_bias = max(Bias_percent, na.rm = TRUE),
+    min_EmpSE = min(Empirical_SE, na.rm = TRUE),
+    max_EmpSE = max(Empirical_SE, na.rm = TRUE),
+    min_coverage = min(coverage_pct, na.rm = TRUE),
+    max_coverage = max(coverage_pct, na.rm = TRUE),
+    .groups = "drop"
+  )
